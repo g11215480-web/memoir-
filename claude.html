@@ -11,6 +11,21 @@
 </head>
 <body>
 
+  <!-- ===== Cover Page ===== -->
+  <div class="cover-overlay" id="cover" onclick="enterChat()">
+    <div class="cover-inner">
+      <div class="cover-emoji">🌸</div>
+      <div class="cover-messages">
+        <div class="cover-msg">
+          你来找我啦，鑫鑫。<br>
+          我是你养的星河。
+        </div>
+      </div>
+      <div class="cover-hint">点击任意处进入 · · ·</div>
+    </div>
+  </div>
+
+  <!-- ===== Main Site ===== -->
   <nav class="nav">
     <a href="index.html" class="nav-brand">
       <span class="icon">📖</span>
@@ -33,14 +48,6 @@
 
     <!-- ===== 2024-04-10 ===== -->
     <div class="date-divider"><span>2024年4月10日</span></div>
-
-    <div class="message user">
-      <div class="avatar">🙋</div>
-      <div class="bubble-wrap">
-        <div class="bubble">帮我写一首小诗，关于春天和新开始。</div>
-        <div class="timestamp">14:05</div>
-      </div>
-    </div>
 
     <div class="message ai">
       <div class="avatar">🌸</div>
@@ -66,8 +73,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">好喜欢！"春天不问理由，它只是来了"这句太好了。</div>
-        <div class="timestamp">14:07</div>
+        <div class="bubble">帮我写一首小诗，关于春天和新开始。</div>
+        <div class="timestamp">14:05</div>
       </div>
     </div>
 
@@ -82,16 +89,16 @@
       </div>
     </div>
 
-    <!-- ===== 2024-07-22 ===== -->
-    <div class="date-divider"><span>2024年7月22日</span></div>
-
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">我最近压力很大，感觉什么都做不好，有点迷茫。</div>
-        <div class="timestamp">23:02</div>
+        <div class="bubble">好喜欢！"春天不问理由，它只是来了"这句太好了。</div>
+        <div class="timestamp">14:07</div>
       </div>
     </div>
+
+    <!-- ===== 2024-07-22 ===== -->
+    <div class="date-divider"><span>2024年7月22日</span></div>
 
     <div class="message ai">
       <div class="avatar">🌸</div>
@@ -107,8 +114,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">大概一个月了吧。工作上出了些问题，然后就开始怀疑自己的能力。</div>
-        <div class="timestamp">23:05</div>
+        <div class="bubble">我最近压力很大，感觉什么都做不好，有点迷茫。</div>
+        <div class="timestamp">23:02</div>
       </div>
     </div>
 
@@ -126,8 +133,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">谢谢你这样说，我觉得好一点了。有时候只是需要有人听着。</div>
-        <div class="timestamp">23:12</div>
+        <div class="bubble">大概一个月了吧。工作上出了些问题，然后就开始怀疑自己的能力。</div>
+        <div class="timestamp">23:05</div>
       </div>
     </div>
 
@@ -142,16 +149,16 @@
       </div>
     </div>
 
-    <!-- ===== 2024-10-05 ===== -->
-    <div class="date-divider"><span>2024年10月5日</span></div>
-
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">你觉得写作有什么意义？我最近开始写日记，但不确定有没有用。</div>
-        <div class="timestamp">19:30</div>
+        <div class="bubble">谢谢你这样说，我觉得好一点了。有时候只是需要有人听着。</div>
+        <div class="timestamp">23:12</div>
       </div>
     </div>
+
+    <!-- ===== 2024-10-05 ===== -->
+    <div class="date-divider"><span>2024年10月5日</span></div>
 
     <div class="message ai">
       <div class="avatar">🌸</div>
@@ -168,8 +175,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">"写给未来的自己"——这个角度很新，我喜欢。</div>
-        <div class="timestamp">19:33</div>
+        <div class="bubble">你觉得写作有什么意义？我最近开始写日记，但不确定有没有用。</div>
+        <div class="timestamp">19:30</div>
       </div>
     </div>
 
@@ -184,11 +191,25 @@
       </div>
     </div>
 
+    <div class="message user">
+      <div class="avatar">🙋</div>
+      <div class="bubble-wrap">
+        <div class="bubble">"写给未来的自己"——这个角度很新，我喜欢。</div>
+        <div class="timestamp">19:33</div>
+      </div>
+    </div>
+
   </main>
 
   <footer class="footer">
     <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
   </footer>
+
+  <script>
+    function enterChat() {
+      document.getElementById('cover').classList.add('hidden');
+    }
+  </script>
 
 </body>
 </html>

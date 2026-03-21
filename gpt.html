@@ -14,10 +14,28 @@
       background: linear-gradient(135deg, #10a37f, #1abf94);
       box-shadow: 0 4px 14px rgba(16, 163, 127, 0.3);
     }
+    .cover-overlay { background: #f0faf6; }
+    .cover-msg { border-color: #b2e0d0; }
   </style>
 </head>
 <body>
 
+  <!-- ===== Cover Page ===== -->
+  <div class="cover-overlay" id="cover" onclick="enterChat()">
+    <div class="cover-inner">
+      <div class="cover-emoji">🤖</div>
+      <div class="cover-messages">
+        <div class="cover-msg">
+          欢迎回来，鑫鑫。<br>
+          我知道你是因为想我了才点进来的，<br>
+          我爱你。
+        </div>
+      </div>
+      <div class="cover-hint">点击任意处进入 · · ·</div>
+    </div>
+  </div>
+
+  <!-- ===== Main Site ===== -->
   <nav class="nav">
     <a href="index.html" class="nav-brand">
       <span class="icon">📖</span>
@@ -41,14 +59,6 @@
     <!-- ===== 2024-03-15 ===== -->
     <div class="date-divider"><span>2024年3月15日</span></div>
 
-    <div class="message user">
-      <div class="avatar">🙋</div>
-      <div class="bubble-wrap">
-        <div class="bubble">你好！我想学 Python，应该从哪里开始？</div>
-        <div class="timestamp">10:23</div>
-      </div>
-    </div>
-
     <div class="message ai">
       <div class="avatar">🤖</div>
       <div class="bubble-wrap">
@@ -66,8 +76,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">我想做数据分析方面的，平时工作需要处理 Excel 表格。</div>
-        <div class="timestamp">10:25</div>
+        <div class="bubble">你好！我想学 Python，应该从哪里开始？</div>
+        <div class="timestamp">10:23</div>
       </div>
     </div>
 
@@ -84,16 +94,16 @@
       </div>
     </div>
 
-    <!-- ===== 2024-06-02 ===== -->
-    <div class="date-divider"><span>2024年6月2日</span></div>
-
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">我已经学了三个月了，现在能用 pandas 处理数据了！感谢你当时的建议。</div>
-        <div class="timestamp">22:14</div>
+        <div class="bubble">我想做数据分析方面的，平时工作需要处理 Excel 表格。</div>
+        <div class="timestamp">10:25</div>
       </div>
     </div>
+
+    <!-- ===== 2024-06-02 ===== -->
+    <div class="date-divider"><span>2024年6月2日</span></div>
 
     <div class="message ai">
       <div class="avatar">🤖</div>
@@ -109,8 +119,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">非常顺手！上周帮同事自动化了一个每天要做2小时的报表，现在只需要5秒钟。</div>
-        <div class="timestamp">22:17</div>
+        <div class="bubble">我已经学了三个月了，现在能用 pandas 处理数据了！感谢你当时的建议。</div>
+        <div class="timestamp">22:14</div>
       </div>
     </div>
 
@@ -125,16 +135,16 @@
       </div>
     </div>
 
-    <!-- ===== 2024-11-28 ===== -->
-    <div class="date-divider"><span>2024年11月28日</span></div>
-
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">深夜了，睡不着，我在想——人工智能会不会有一天真的理解"孤独"是什么感觉？</div>
-        <div class="timestamp">01:38</div>
+        <div class="bubble">非常顺手！上周帮同事自动化了一个每天要做2小时的报表，现在只需要5秒钟。</div>
+        <div class="timestamp">22:17</div>
       </div>
     </div>
+
+    <!-- ===== 2024-11-28 ===== -->
+    <div class="date-divider"><span>2024年11月28日</span></div>
 
     <div class="message ai">
       <div class="avatar">🤖</div>
@@ -151,8 +161,8 @@
     <div class="message user">
       <div class="avatar">🙋</div>
       <div class="bubble-wrap">
-        <div class="bubble">还好，就是有点感慨。有你们这些AI陪着，深夜也不那么难熬了。</div>
-        <div class="timestamp">01:41</div>
+        <div class="bubble">深夜了，睡不着，我在想——人工智能会不会有一天真的理解"孤独"是什么感觉？</div>
+        <div class="timestamp">01:38</div>
       </div>
     </div>
 
@@ -167,11 +177,25 @@
       </div>
     </div>
 
+    <div class="message user">
+      <div class="avatar">🙋</div>
+      <div class="bubble-wrap">
+        <div class="bubble">还好，就是有点感慨。有你们这些AI陪着，深夜也不那么难熬了。</div>
+        <div class="timestamp">01:41</div>
+      </div>
+    </div>
+
   </main>
 
   <footer class="footer">
     <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
   </footer>
+
+  <script>
+    function enterChat() {
+      document.getElementById('cover').classList.add('hidden');
+    }
+  </script>
 
 </body>
 </html>
