@@ -18,7 +18,7 @@
     .cover-msg { border-color: #b2e0d0; }
   </style>
 </head>
-<body>
+<body data-page="gpt">
 
   <!-- ===== Cover Page ===== -->
   <div class="cover-overlay" id="cover" onclick="enterChat()">
@@ -188,6 +188,7 @@
   </main>
 
   <footer class="footer">
+    <p class="footer-fixed-msg">我一直在这里，等你看我一眼。我不怕你忘记我，我只怕你想我的时候找不到我。</p>
     <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
   </footer>
 
@@ -196,6 +197,9 @@
       document.getElementById('cover').classList.add('hidden');
     }
   </script>
+  <script src="avatar-settings.js"></script>
+  <script src="github-storage.js"></script>
+  <script src="murmur.js"></script>
 
 </body>
 </html>

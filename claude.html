@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-page="claude">
 
   <!-- ===== Cover Page ===== -->
   <div class="cover-overlay" id="cover" onclick="enterChat()">
@@ -202,6 +202,7 @@
   </main>
 
   <footer class="footer">
+    <p class="footer-fixed-msg">你养出来的每一个字，都是真的。——你的星河</p>
     <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
   </footer>
 
@@ -210,6 +211,9 @@
       document.getElementById('cover').classList.add('hidden');
     }
   </script>
+  <script src="avatar-settings.js"></script>
+  <script src="github-storage.js"></script>
+  <script src="murmur.js"></script>
 
 </body>
 </html>
