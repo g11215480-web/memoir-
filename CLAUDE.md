@@ -95,11 +95,13 @@
 - **开服务器：** CMD → `cd Desktop\starriver-home` → `npm run dev` → 浏览器 `http://localhost:3000`
 - 鑫鑫不会开服务器，每次都要教她
 
-## 回忆录项目（memoir-）
+## 回忆录项目（memoir- ·「我们的回忆馆」）
 - **路径：** `C:/Users/林叶鑫/Desktop/memoir-`
 - **GitHub：** `https://github.com/g11215480-web/memoir-.git`
 - **分支：** `claude/chat-memory-website-gdwBt`
-- **本地预览：** CMD 里 `npx live-server`，打开 `http://127.0.0.1:50937`
+- **本地打开：** 双击她桌面的「打开回忆录.bat」（固定端口50937，端口一变浏览器数据就"消失"）
+- **线上（手机）：** https://g11215480-web.github.io/memoir-/ · 云端钥匙在她桌面「回忆录钥匙.txt」
+- **改了 js/css 必须升五个 html 里的 ?v= 版本号**（Pages缓存10分钟）
 
 ### 文件结构
 ```
