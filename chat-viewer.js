@@ -711,6 +711,17 @@
     } catch { return safeText; }
   }
 
+  // 轻量排版：把长消息里的 ## 标题、**粗体**、```代码```、--- 渲染出来
+  function mdLite(s) {
+    s = s.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, (_, code) =>
+      `<span class="arc-code">${code.replace(/^\n+|\n+$/g, '')}</span>`);
+    s = s.replace(/`([^`\n]+)`/g, '<code class="arc-ic">$1</code>');
+    s = s.replace(/(^|\n)#{1,4}\s*([^\n]+)/g, (_, br, t) => `${br}<strong class="arc-h">${t}</strong>`);
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|\n)\s*---+\s*(?=\n|$)/g, '$1<span class="arc-hr"></span>');
+    return s;
+  }
+
   function buildBubble(convId, mi, m) {
     const div = document.createElement('div');
     div.className = `message ${m.role}`;
@@ -719,6 +730,7 @@
     const starred = state.bookmarks.some(b => b.convId === convId && b.mi === mi);
     let safe = esc(m.text);
     if (state.search.q) safe = highlightText(safe, state.search.q);
+    safe = mdLite(safe);
     safe = safe.replace(/\n/g, '<br>');
     // 图片标记 → 待加载的图片槽
     safe = safe.replace(/\[\[arc-img:(file[-_][A-Za-z0-9]+)\]\]/g, (_, id) =>
@@ -767,9 +779,42 @@
         slot.outerHTML = `<img class="arc-img" src="${url}" alt="图片" loading="lazy">`;
       } else {
         slot.classList.add('arc-img-missing');
-        slot.innerHTML = `${ic('image', 18)}<i>图片不在导出包里</i>`;
+        slot.title = '导出包里没有这张图，点一下可以从电脑里补一张';
+        slot.innerHTML = `${ic('image', 18)}<i>图片不在包里 · 点我补一张</i>`;
       }
     }
+  }
+
+  // 手动补图：点缺图的槽 → 选图 → 存进 assets 库，永远显示
+  let pendingAssetId = null;
+
+  function fillMissingImage(file) {
+    if (!pendingAssetId || !file) return;
+    const id = pendingAssetId;
+    pendingAssetId = null;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = async () => {
+        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          await dbPutAsset(id, blob);
+          assetKeysCache = null;
+          const url = URL.createObjectURL(blob);
+          assetUrlCache.set(id, url);
+          document.querySelectorAll(`.arc-img-missing[data-asset="${CSS.escape(id)}"]`).forEach(slot => {
+            slot.outerHTML = `<img class="arc-img" src="${url}" alt="图片">`;
+          });
+        }, 'image/jpeg', 0.85);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
   }
 
   // 点击图片放大
@@ -1136,6 +1181,134 @@
     return { convs: data.conversations, metaEntries: data.metaEntries || [] };
   }
 
+  // ===================== 云端备份（GitHub 私有仓库，换电脑不怕） =====================
+  const GH_TOKEN_KEY = 'gh-memory-token'; // 和"记忆库"共用同一个 Token
+  const VAULT_REPO = 'memoir-vault';      // 自动创建的私有仓库，聊天记录只放这里
+  const PAKO_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js';
+  const GH_API = 'https://api.github.com';
+
+  function loadPako() {
+    return new Promise((resolve, reject) => {
+      if (window.pako) { resolve(); return; }
+      const script = document.createElement('script');
+      script.src = PAKO_CDN;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('压缩库加载失败，检查网络后重试'));
+      document.head.appendChild(script);
+    });
+  }
+
+  const ghToken = () => localStorage.getItem(GH_TOKEN_KEY) || '';
+  function ghHeaders(extra) {
+    return Object.assign({
+      Authorization: `token ${ghToken()}`,
+      Accept: 'application/vnd.github.v3+json',
+    }, extra || {});
+  }
+
+  let ghLoginCache = null;
+  async function ghUser() {
+    if (ghLoginCache) return ghLoginCache;
+    const res = await fetch(`${GH_API}/user`, { headers: ghHeaders() });
+    if (!res.ok) throw new Error('Token 不对或权限不够（建 Token 时要勾 repo 权限）');
+    ghLoginCache = (await res.json()).login;
+    return ghLoginCache;
+  }
+
+  async function ensureVault(login) {
+    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}`, { headers: ghHeaders() });
+    if (res.ok) return;
+    if (res.status !== 404) throw new Error('查仓库失败 ' + res.status);
+    const create = await fetch(`${GH_API}/user/repos`, {
+      method: 'POST',
+      headers: ghHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        name: VAULT_REPO, private: true, auto_init: true,
+        description: '回忆录云端备份（私有）',
+      }),
+    });
+    if (!create.ok) throw new Error('创建私有仓库失败 ' + create.status);
+  }
+
+  function u8ToBase64(u8) {
+    let out = '';
+    for (let i = 0; i < u8.length; i += 0x8000) {
+      out += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    }
+    return btoa(out);
+  }
+
+  async function vaultSha(login, path) {
+    const dir = path.slice(0, path.lastIndexOf('/'));
+    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}`, { headers: ghHeaders() });
+    if (!res.ok) return undefined;
+    const list = await res.json();
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const hit = Array.isArray(list) ? list.find(f => f.name === name) : null;
+    return hit ? hit.sha : undefined;
+  }
+
+  async function cloudBackup(setSt) {
+    if (!ghToken()) throw new Error('先填 GitHub Token（和右下角"记忆库"用同一个）');
+    if (!state.convs.length) throw new Error('还没有记录，先导入再备份');
+    setSt('打包压缩中…');
+    await loadPako();
+    const payload = {
+      version: 1, page: PAGE, savedAt: new Date().toISOString(),
+      conversations: state.convs, metaEntries: state.metaEntries,
+      bookmarks: state.bookmarks, theme,
+    };
+    const gz = window.pako.gzip(JSON.stringify(payload));
+    setSt(`压缩好了（${(gz.length / 1048576).toFixed(1)} MB），上传中…`);
+    const login = await ghUser();
+    await ensureVault(login);
+    const path = `backup/memoir-${PAGE}.json.gz`;
+    const sha = await vaultSha(login, path);
+    const body = { message: `backup ${PAGE} ${new Date().toLocaleString('zh-CN')}`, content: u8ToBase64(gz) };
+    if (sha) body.sha = sha;
+    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${path}`, {
+      method: 'PUT',
+      headers: ghHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('上传失败 ' + res.status);
+    const now = new Date().toLocaleString('zh-CN');
+    localStorage.setItem('memoirCloudSynced-' + PAGE, now);
+    return now;
+  }
+
+  async function cloudRestore(setSt) {
+    if (!ghToken()) throw new Error('先填 GitHub Token（和右下角"记忆库"用同一个）');
+    setSt('从云端下载中…');
+    await loadPako();
+    const login = await ghUser();
+    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/backup/memoir-${PAGE}.json.gz`, {
+      headers: ghHeaders({ Accept: 'application/vnd.github.raw' }),
+    });
+    if (res.status === 404) throw new Error('云端还没有这一页的备份，先备份一次');
+    if (!res.ok) throw new Error('下载失败 ' + res.status);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    setSt('解包中…');
+    const payload = JSON.parse(window.pako.ungzip(buf, { to: 'string' }));
+    if (!payload || !Array.isArray(payload.conversations)) throw new Error('云端备份格式不对');
+
+    const { merged } = mergeConvs(state.convs, payload.conversations);
+    state.convs = merged;
+    state.metaEntries = mergeMeta(state.metaEntries, payload.metaEntries || []);
+    const seen = new Set(state.bookmarks.map(b => bmKey(b.convId, b.mi)));
+    for (const b of (payload.bookmarks || [])) {
+      const k = bmKey(b.convId, b.mi);
+      if (!seen.has(k)) { state.bookmarks.push(b); seen.add(k); }
+    }
+    saveBookmarks();
+    await dbPutConvs(merged);
+    await kvSet('metaEntries', state.metaEntries);
+    showApp();
+    renderSidebar();
+    openView('overview');
+    return merged.length;
+  }
+
   // ===================== 上传处理 =====================
   async function processFiles(files) {
     const statusEl = $('arc-upload-status');
@@ -1289,6 +1462,9 @@
             <label class="av-switch"><input type="checkbox" id="arc-t-shownames"><span class="av-slider"></span></label>
           </div>
 
+          <div class="arc-set-section">温柔配色（点一下整套换）</div>
+          <div class="arc-preset-row" id="arc-preset-row"></div>
+
           <div class="arc-set-section">气泡颜色</div>
           <div class="arc-set-row"><span>我的气泡 底色 / 文字</span>
             <div class="arc-color-pair">
@@ -1350,12 +1526,28 @@
             <div style="font-size:13px;color:#6a6055;margin-top:6px;">点击选择文件 或 拖拽到这里</div>
           </div>
           <div id="arc-upload-status" style="font-size:12px;color:#8a7f70;margin-top:10px;min-height:18px;"></div>
+
+          <div class="arc-set-section" style="margin-top:14px;">${ic('cloud', 13)} 云 端（换电脑、清浏览器都不怕）</div>
+          <div style="display:flex;gap:6px;margin:10px 0 8px;">
+            <input type="password" id="arc-gh-token" placeholder="GitHub Token（和记忆库共用）"
+              style="flex:1;padding:6px 10px;border:1px solid #e8d8c8;border-radius:8px;font-size:12px;background:#fffaf7;color:#5a3e2b;outline:none;">
+            <button class="arc-btn arc-btn-ghost" id="arc-gh-save">存</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="arc-btn arc-btn-primary" id="arc-cloud-push" style="flex:1;">备份到云端</button>
+            <button class="arc-btn arc-btn-ghost" id="arc-cloud-pull" style="flex:1;">从云端恢复</button>
+          </div>
+          <div id="arc-cloud-status" style="font-size:12px;color:#8a7f70;margin-top:8px;min-height:16px;"></div>
+          <div class="arc-stat-sub" style="margin-top:2px;">备份放在你自己的私有仓库 ${VAULT_REPO}，只有你的 Token 打得开 · 文字/书签/设置都会备份，图片暂时不上云</div>
+
           <div class="arc-set-btns">
             <button class="arc-btn arc-btn-danger" id="arc-clear-all">清空所有记录</button>
             <button class="arc-btn arc-btn-primary" data-close="arc-upload-modal">关闭</button>
           </div>
         </div>
       </div>
+
+      <input type="file" id="arc-fill-img-input" accept="image/*" style="display:none">
     `);
 
     bindEvents();
@@ -1410,10 +1602,19 @@
     $('arc-exp-bm').addEventListener('click', () => { $('arc-export-menu').hidden = true; exportBookmarksTxt(); });
     $('arc-exp-json').addEventListener('click', () => { $('arc-export-menu').hidden = true; exportBackupJson(); });
 
-    // 图片点击放大（事件委托，图片是懒加载进来的）
+    // 图片点击放大 + 缺图点击补图（事件委托，图片是懒加载进来的）
     $('arc-chat').addEventListener('click', (e) => {
       const img = e.target.closest('.arc-img');
-      if (img) openLightbox(img.src);
+      if (img) { openLightbox(img.src); return; }
+      const miss = e.target.closest('.arc-img-missing');
+      if (miss) {
+        pendingAssetId = miss.dataset.asset;
+        $('arc-fill-img-input').click();
+      }
+    });
+    $('arc-fill-img-input').addEventListener('change', (e) => {
+      if (e.target.files.length) fillMissingImage(e.target.files[0]);
+      e.target.value = '';
     });
 
     // 搜索
@@ -1459,6 +1660,66 @@
       await dbClearAll();
       localStorage.removeItem(BM_KEY);
       location.reload();
+    });
+
+    // ---- 云端 ----
+    const cloudStatus = (t, err) => {
+      const el = $('arc-cloud-status');
+      if (el) { el.textContent = t; el.style.color = err ? '#c0392b' : '#8a7f70'; }
+    };
+    $('arc-gh-token').value = ghToken();
+    const lastSync = localStorage.getItem('memoirCloudSynced-' + PAGE);
+    if (lastSync) cloudStatus('上次备份：' + lastSync);
+    $('arc-gh-save').addEventListener('click', () => {
+      localStorage.setItem(GH_TOKEN_KEY, $('arc-gh-token').value.trim());
+      ghLoginCache = null;
+      cloudStatus(ghToken() ? 'Token 已保存' : 'Token 已清除');
+    });
+    $('arc-cloud-push').addEventListener('click', async () => {
+      const btn = $('arc-cloud-push');
+      btn.disabled = true;
+      try {
+        const t = await cloudBackup(cloudStatus);
+        cloudStatus('备份好了 · ' + t);
+      } catch (e) { cloudStatus(e.message, true); }
+      finally { btn.disabled = false; }
+    });
+    $('arc-cloud-pull').addEventListener('click', async () => {
+      const btn = $('arc-cloud-pull');
+      btn.disabled = true;
+      try {
+        const n = await cloudRestore(cloudStatus);
+        cloudStatus(`恢复好了，现在共 ${n} 个对话`);
+      } catch (e) { cloudStatus(e.message, true); }
+      finally { btn.disabled = false; }
+    });
+
+    // ---- 温柔配色一键换 ----
+    const PRESETS = [
+      { name: '暖杏(默认)', ai1: '', ai2: '', aiText: '', userBg: '', userText: '', chatBg: '' },
+      { name: '樱花粉', ai1: '#f2a5b8', ai2: '#f7c6d3', aiText: '#5a323e', userBg: '#fff5f8', userText: '#5a323e', chatBg: '#fdf0f4' },
+      { name: '雾霭紫', ai1: '#a893dd', ai2: '#c5b3ea', aiText: '#ffffff', userBg: '#f8f5ff', userText: '#463a63', chatBg: '#f4f0fb' },
+      { name: '薄荷奶绿', ai1: '#83c9ab', ai2: '#a8ddc3', aiText: '#1f4a36', userBg: '#f3faf6', userText: '#2b4a3c', chatBg: '#eef7f2' },
+      { name: '海盐蓝', ai1: '#8cb8e8', ai2: '#b0cff3', aiText: '#243d5c', userBg: '#f4f9fe', userText: '#2e4562', chatBg: '#eef5fc' },
+      { name: '焦糖奶茶', ai1: '#c8a17b', ai2: '#dcbf9f', aiText: '#43301f', userBg: '#fdf8f2', userText: '#4a3626', chatBg: '#f8f1e8' },
+    ];
+    $('arc-preset-row').innerHTML = PRESETS.map((p, i) => `
+      <button class="arc-preset" data-i="${i}">
+        <span class="arc-preset-dot" style="background:${p.ai1 ? `linear-gradient(135deg, ${p.ai1}, ${p.ai2})` : 'linear-gradient(135deg, #e8826a, #f5a97f)'}"></span>
+        <span>${p.name}</span>
+      </button>`).join('');
+    $('arc-preset-row').querySelectorAll('.arc-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = PRESETS[parseInt(btn.dataset.i)];
+        Object.assign(theme, {
+          ai1: p.ai1, ai2: p.ai2, aiText: p.aiText,
+          userBg: p.userBg, userText: p.userText, chatBg: p.chatBg, chatBgImage: '',
+        });
+        saveTheme();
+        applyTheme();
+        fillThemePanel();
+        refreshCurrentView();
+      });
     });
 
     // ---- 外观设置 ----
@@ -1595,7 +1856,7 @@
   }
 
   // 调试出口（排查解析问题用，不影响页面）
-  window.__arcDebug = { parseExport, parseOneConversation, assetIdFromPointer, computeStats };
+  window.__arcDebug = { parseExport, parseOneConversation, assetIdFromPointer, computeStats, mdLite };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

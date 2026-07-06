@@ -680,6 +680,78 @@ body.arc-themed-user .message.user .bubble {
 }
 .arc-upload-zone.arc-dragover { background: rgba(232,130,106,0.15); }
 
+/* ---- 温柔配色预设 ---- */
+.arc-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 4px;
+}
+.arc-preset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--accent-muted);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all 0.2s;
+}
+.arc-preset:hover {
+  border-color: var(--accent-light);
+  background: var(--bg-secondary);
+  transform: translateY(-1px);
+}
+.arc-preset-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.8);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+
+/* ---- 长消息轻排版 ---- */
+.bubble .arc-h {
+  display: block;
+  font-size: 1.04em;
+  margin: 4px 0 2px;
+}
+.bubble .arc-code {
+  display: block;
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.85em;
+  line-height: 1.6;
+  word-break: break-all;
+}
+.message.user .bubble .arc-code { background: rgba(0, 0, 0, 0.06); }
+.bubble .arc-ic {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.88em;
+}
+.message.user .bubble .arc-ic { background: rgba(0, 0, 0, 0.06); }
+.bubble .arc-hr {
+  display: block;
+  border-top: 1px dashed currentColor;
+  opacity: 0.4;
+  margin: 8px 0;
+}
+
+/* 缺图槽可点击补图 */
+.arc-img-missing { cursor: pointer; }
+.arc-img-missing:hover { opacity: 1; }
+
 /* ---- 线条图标通用 ---- */
 .arc-icon {
   vertical-align: -0.18em;
