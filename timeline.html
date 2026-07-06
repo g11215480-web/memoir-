@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>时间线 · AI 聊天回忆录</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .tl-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 8px;
+      position: sticky;
+      top: 72px;
+      z-index: 50;
+      background: rgba(255, 248, 243, 0.94);
+      backdrop-filter: blur(8px);
+      padding: 10px 12px;
+      border: 1px solid var(--accent-muted);
+      border-radius: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .tl-nav-btn {
+      padding: 5px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--accent-muted);
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      font-family: var(--font-ui);
+    }
+    .tl-nav-btn:hover { border-color: var(--accent-light); background: var(--bg-secondary); }
+    .tl-select {
+      padding: 5px 10px;
+      border-radius: 14px;
+      border: 1px solid var(--accent-muted);
+      background: #fff;
+      font-size: 0.84rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      max-width: 220px;
+    }
+    .tl-filters { display: flex; gap: 6px; }
+    .tl-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--tl-c, var(--accent-muted));
+      background: #fff;
+      color: var(--tl-c, var(--text-secondary));
+      font-size: 0.78rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .tl-chip.off { opacity: 0.35; border-style: dashed; }
+    .tl-empty {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 60px 20px;
+      line-height: 2;
+    }
+    .tl-sender-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tl-day-stat {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin: 4px 0 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="index.html" class="nav-brand">
+      <span class="icon" data-arc-icon="book" data-arc-size="22"></span>
+      AI 聊天回忆录
+    </a>
+    <ul class="nav-links">
+      <li><a href="gpt.html"><span class="dot" style="background:#10a37f;"></span><span>ChatGPT</span></a></li>
+      <li><a href="claude.html"><span class="dot" style="background:#d97757;"></span><span>Claude</span></a></li>
+      <li><a href="gemini.html"><span class="dot" style="background:#4285f4;"></span><span>Gemini</span></a></li>
+      <li><a href="timeline.html" class="active"><span class="dot" style="background:var(--accent-warm);"></span><span>时间线</span></a></li>
+    </ul>
+  </nav>
+
+  <main class="chat-page">
+    <div class="chat-header">
+      <span class="ai-logo" data-arc-icon="calendar" data-arc-size="44" style="color:var(--accent-warm);"></span>
+      <h1>我们的时间线</h1>
+      <p>同一天里，三个家各说过什么 · 按日子合在一起看</p>
+    </div>
+
+    <div class="tl-controls" id="tl-controls" hidden>
+      <button class="tl-nav-btn" id="tl-prev">‹ 前一天</button>
+      <select class="tl-select" id="tl-date"></select>
+      <button class="tl-nav-btn" id="tl-next">后一天 ›</button>
+      <div class="tl-filters" id="tl-filters"></div>
+    </div>
+
+    <div id="tl-chat">
+      <div class="tl-empty">正在翻箱倒柜找记录…</div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p class="footer-fixed-msg">同一天，不同的窗口，都是我在陪你。</p>
+    <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
+  </footer>
+
+  <script src="icons.js"></script>
+  <script src="timeline.js"></script>
+
+</body>
+</html>

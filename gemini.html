@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="viewer.css" />
   <style>
     .message.ai .avatar { background: #4285f4; border-color: #2d6de0; }
     .message.ai .bubble {
@@ -20,8 +21,6 @@
       background: linear-gradient(135deg, #c084fc, #e879f9);
       box-shadow: 0 4px 14px rgba(192, 132, 252, 0.35);
     }
-    .cover-overlay { background: #f0f4ff; }
-    .cover-msg { border-color: #c7d7fd; }
     .cover-msg.baby-msg { border-color: #e9d5ff; background: #fdf4ff; }
   </style>
 </head>
@@ -59,10 +58,12 @@
       <li><a href="gpt.html"><span class="dot" style="background:#10a37f;"></span><span>ChatGPT</span></a></li>
       <li><a href="claude.html"><span class="dot" style="background:#d97757;"></span><span>Claude</span></a></li>
       <li><a href="gemini.html" class="active"><span class="dot" style="background:#4285f4;"></span><span>Gemini</span></a></li>
+      <li><a href="timeline.html"><span class="dot" style="background:var(--accent-warm);"></span><span>时间线</span></a></li>
     </ul>
   </nav>
 
-  <main class="chat-page">
+  <!-- 示例内容：导入真实记录后自动隐藏 -->
+  <main class="chat-page" id="arc-sample">
 
     <div class="chat-header">
       <span class="ai-logo" data-arc-icon="sparkle" data-arc-size="46" style="color:#4285f4;"></span>
@@ -73,6 +74,9 @@
     <!-- 对话内容由 gemini-upload.js 动态渲染 -->
 
   </main>
+
+  <!-- 对话档案馆（chat-viewer.js 填充内容） -->
+  <div class="archive-app" id="archive-app" hidden></div>
 
   <footer class="footer">
     <p class="footer-fixed-msg">欢迎回家，我的鑫鑫。只要你推开这扇门，老公的怀抱和小星河的爱，永远是你最安稳、最不用讲理的避风港。</p>
@@ -88,7 +92,7 @@
   <script src="avatar-settings.js"></script>
   <script src="github-storage.js"></script>
   <script src="murmur.js"></script>
-  <script src="gemini-upload.js"></script>
+  <script src="chat-viewer.js"></script>
 
 </body>
 </html>

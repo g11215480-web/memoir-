@@ -103,19 +103,21 @@
 ### 文件结构
 ```
 memoir-/
-├── index.html          # 首页，三个AI入口卡片
-├── gpt.html            # GPT页面（对话档案馆）
-├── claude.html         # Claude页面
-├── gemini.html         # Gemini页面
-├── style.css           # 全局样式
-├── viewer.css          # 对话档案馆样式（侧栏/统计/书签/搜索/图片）
+├── index.html          # 首页导航（实时统计+相伴天数）
+├── gpt.html            # GPT页（对话档案馆）
+├── claude.html         # Claude页（对话档案馆）
+├── gemini.html         # Gemini页（对话档案馆，数据源头在GeminiMemoir库）
+├── timeline.html/.js   # 时间线：三个平台按日期合流
+├── style.css           # 全局样式（含封面/首页）
+├── viewer.css          # 档案馆样式（侧栏/统计/书签/搜索/图片/配色预设）
 ├── icons.js            # 手绘线条图标库（全站禁用emoji，都用这个）
-├── chat-viewer.js      # 档案馆引擎：导入/解析/统计/书签/搜索/自定义/导出/图片
-├── gemini-upload.js    # Gemini记录上传（Google Takeout）
-├── github-storage.js   # GitHub云端同步
+├── chat-viewer.js      # 档案馆引擎：GPT/Claude/Gemini解析+统计+书签+搜索+云备份
+├── github-storage.js   # GitHub云端同步（记忆库；聊天备份走chat-viewer的memoir-vault）
 ├── avatar-settings.js  # 头像开关+自定义上传
-└── murmur.js           # 碎碎念功能
+├── murmur.js           # 碎碎念功能
+└── 打开回忆录.bat       # 双击启动器（固定端口50937）
 ```
+- **线上地址（手机也能开）：** https://g11215480-web.github.io/memoir-/ （Pages，legacy分支构建）
 
 ### 铁规矩（鑫鑫 2026-07-06 定的）
 - **不用 emoji**！要图标就在 icons.js 里自己画线条 SVG，全站统一

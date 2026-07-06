@@ -23,7 +23,7 @@
     },
     gemini: {
       label: 'Gemini', color1: '#4285f4', color2: '#6fa3f8', aiIcon: 'sparkle',
-      hint: 'Google Takeout 导出',
+      hint: 'Google Takeout（takeout.google.com）勾选"我的活动 → Gemini Apps"导出，把 ZIP 或 我的活动记录.html 丢进来',
     },
   };
   const brand = BRAND[PAGE] || BRAND.gpt;
@@ -423,6 +423,154 @@
     return { convs, metaEntries };
   }
 
+  // ===================== Gemini（Google Takeout 活动记录，沿用老库 GeminiMemoir） =====================
+  // 老模块 gemini-upload.js 的数据原样保留在 GeminiMemoir 里作为源头，
+  // 档案馆的"对话"是按天从它重新生成的，怎么折腾都不会丢原始记录。
+
+  function geminiOpenDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('GeminiMemoir', 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('conversations')) {
+          const store = db.createObjectStore('conversations', { keyPath: 'id' });
+          store.createIndex('date', 'date', { unique: false });
+          store.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function geminiLoadRecords() {
+    try {
+      const db = await geminiOpenDB();
+      return new Promise((resolve) => {
+        const r = db.transaction('conversations', 'readonly').objectStore('conversations').getAll();
+        r.onsuccess = () => { db.close(); resolve(r.result || []); };
+        r.onerror = () => { db.close(); resolve([]); };
+      });
+    } catch { return []; }
+  }
+
+  async function geminiSaveRecords(records) {
+    const db = await geminiOpenDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('conversations', 'readwrite');
+      const store = tx.objectStore('conversations');
+      for (const r of records) store.put(r);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  // "2026年4月15日 14:06:08 GMT+8" / "Apr 15, 2026, 2:06:08 PM PDT" → 毫秒
+  function geminiTsToMs(timestamp, date) {
+    const m = timestamp && timestamp.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2}):(\d{2})/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    if (timestamp) {
+      const p = Date.parse(timestamp.replace(/\s+[A-Z]{2,5}(\+\d+)?$/, ''));
+      if (!isNaN(p)) return p;
+    }
+    return date ? new Date(date + 'T12:00:00').getTime() : Date.now();
+  }
+
+  // 活动记录是零散轮次 → 按天拼成对话
+  function geminiRecordsToConvs(records) {
+    const byDate = {};
+    for (const r of records) {
+      const ts = geminiTsToMs(r.timestamp, r.date);
+      const d = r.date || fmtDate(ts);
+      (byDate[d] = byDate[d] || []).push({ r, ts });
+    }
+    const convs = [];
+    for (const [d, items] of Object.entries(byDate)) {
+      items.sort((a, b) => a.ts - b.ts || String(a.r.id).localeCompare(String(b.r.id)));
+      const messages = [];
+      for (const { r, ts } of items) {
+        if (r.userInput) messages.push({ role: 'user', text: r.userInput, ts });
+        if (r.aiResponse) messages.push({ role: 'ai', text: r.aiResponse, ts });
+      }
+      if (!messages.length) continue;
+      convs.push({
+        id: 'gemini-day-' + d,
+        title: fmtDateCn(d),
+        messages,
+        stats: computeStats(messages),
+        firstTs: messages[0].ts,
+        lastTs: messages[messages.length - 1].ts,
+      });
+    }
+    convs.sort((a, b) => b.lastTs - a.lastTs);
+    return convs;
+  }
+
+  // Takeout 的 我的活动记录.html 解析（从 gemini-upload.js 移植）
+  function parseGeminiHTML(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const records = [];
+    const cells = doc.querySelectorAll('.outer-cell');
+    for (const cell of cells) {
+      const title = cell.querySelector('.mdl-typography--title');
+      if (!title || !title.textContent.includes('Gemini')) continue;
+      const fullText = cell.textContent;
+
+      let userInput = '';
+      let timestamp = '';
+      let aiResponse = '';
+
+      const promptedMatch = fullText.match(/Prompted\s+(.+?)(?=\d{4}年\d{1,2}月\d{1,2}日)/s);
+      if (promptedMatch) userInput = promptedMatch[1].trim();
+
+      const timeMatch = fullText.match(/(\d{4}年\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2}:\d{2}\s*[A-Z]*)/);
+      if (timeMatch) timestamp = timeMatch[1].trim();
+
+      if (timestamp) {
+        const timeIndex = fullText.indexOf(timestamp);
+        if (timeIndex > -1) {
+          let afterTime = fullText.substring(timeIndex + timestamp.length);
+          afterTime = afterTime.replace(/\s*Gemini Apps\s*$/g, '').trim();
+          afterTime = afterTime.replace(/商品：\s*Gemini Apps为什么此处会显示此活动记录[\s\S]*?控制这些设置。?/g, '').trim();
+          if (afterTime.length > 0) aiResponse = afterTime;
+        }
+      }
+
+      if (userInput.includes('Gemini Apps为什么此处会显示') || userInput.includes('Activity') || userInput.startsWith('商品：')) continue;
+      if (!userInput) continue;
+
+      const idStr = timestamp + (userInput || '').substring(0, 50);
+      let hash = 0;
+      for (let i = 0; i < idStr.length; i++) {
+        hash = ((hash << 5) - hash) + idStr.charCodeAt(i);
+        hash = hash & hash;
+      }
+      const dateM = timestamp.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+      records.push({
+        id: 'gem_' + Math.abs(hash).toString(36),
+        timestamp,
+        date: dateM ? `${dateM[1]}-${dateM[2].padStart(2, '0')}-${dateM[3].padStart(2, '0')}` : '',
+        userInput,
+        aiResponse,
+        isIncomplete: !aiResponse,
+      });
+    }
+    records.reverse();
+    return records;
+  }
+
+  function geminiMergeRecords(existing, incoming) {
+    const map = new Map();
+    for (const r of existing) map.set(r.id, r);
+    let added = 0;
+    for (const r of incoming) {
+      const old = map.get(r.id);
+      if (!old) { map.set(r.id, r); added++; }
+      else if (!old.aiResponse && r.aiResponse) map.set(r.id, r);
+    }
+    return { merged: [...map.values()], added };
+  }
+
   function mergeConvs(existing, incoming) {
     const byId = new Map(existing.map(c => [c.id, c]));
     let added = 0, updated = 0;
@@ -450,6 +598,7 @@
 
   // ===================== 旧版数据迁移（GptMemoir 平铺轮次 → 按标题分组） =====================
   async function migrateLegacy() {
+    if (PAGE !== 'gpt') return;
     if (state.convs.length > 0) return; // 已有新版数据就不迁
     const legacy = await new Promise((resolve) => {
       const req = indexedDB.open('GptMemoir', 1);
@@ -1316,8 +1465,29 @@
 
     let newConvs = [];
     let newMeta = [];
+    let newGemini = [];
     for (const file of files) {
       try {
+        if (PAGE === 'gemini' && file.name.endsWith('.html')) {
+          setStatus(`解析 ${file.name} ...`);
+          newGemini = newGemini.concat(parseGeminiHTML(await file.text()));
+          continue;
+        }
+        if (PAGE === 'gemini' && file.name.endsWith('.zip')) {
+          setStatus(`解压 ${file.name} ...`);
+          await loadJSZip();
+          const zip = await window.JSZip.loadAsync(file);
+          const htmlEntries = [];
+          zip.forEach((path, entry) => {
+            if (!entry.dir && path.endsWith('.html')) htmlEntries.push(entry);
+          });
+          if (!htmlEntries.length) { setStatus(`${file.name} 里没找到活动记录 HTML`); continue; }
+          for (const entry of htmlEntries) {
+            setStatus(`解析 ${entry.name} ...`);
+            newGemini = newGemini.concat(parseGeminiHTML(await entry.async('string')));
+          }
+          continue;
+        }
         if (file.name.endsWith('.zip')) {
           setStatus(`解压 ${file.name} ...`);
           await loadJSZip();
@@ -1370,6 +1540,16 @@
         setStatus(`解析 ${file.name} 失败：${err.message}`);
         return;
       }
+    }
+
+    // Gemini：轮次记录先并进老库（源头），再按天重新生成对话
+    if (newGemini.length) {
+      setStatus(`合并 ${newGemini.length} 条活动记录...`);
+      const existing = await geminiLoadRecords();
+      const { merged: mergedRecords, added } = geminiMergeRecords(existing, newGemini);
+      await geminiSaveRecords(mergedRecords);
+      newConvs = newConvs.concat(geminiRecordsToConvs(mergedRecords));
+      setStatus(`活动记录新增 ${added} 条，重建对话中...`);
     }
 
     if (!newConvs.length && !newMeta.length) { setStatus('没解析出任何内容'); return; }
@@ -1521,7 +1701,7 @@
             <small>记录存在浏览器里，要用固定的网址打开才看得到——用桌面的「打开回忆录」启动器就永远不会丢</small>
           </p>
           <div class="arc-upload-zone" id="arc-upload-zone">
-            <input type="file" id="arc-file-input" multiple accept=".json,.zip" style="display:none" />
+            <input type="file" id="arc-file-input" multiple accept="${PAGE === 'gemini' ? '.json,.zip,.html' : '.json,.zip'}" style="display:none" />
             <div style="color:#b08b78;">${ic('folder', 30)}</div>
             <div style="font-size:13px;color:#6a6055;margin-top:6px;">点击选择文件 或 拖拽到这里</div>
           </div>
@@ -1844,6 +2024,18 @@
 
     state.convs = (await dbGetAllConvs()).sort((a, b) => b.lastTs - a.lastTs);
     await migrateLegacy();
+
+    // Gemini：每次启动都从老库（源头）重建按天对话，老数据一条不丢
+    if (PAGE === 'gemini') {
+      const records = await geminiLoadRecords();
+      if (records.length) {
+        const regen = geminiRecordsToConvs(records);
+        const { merged } = mergeConvs(state.convs, regen);
+        state.convs = merged;
+        await dbPutConvs(merged);
+      }
+    }
+
     state.metaEntries = (await kvGet('metaEntries')) || [];
 
     if (state.convs.length > 0) {
@@ -1856,7 +2048,7 @@
   }
 
   // 调试出口（排查解析问题用，不影响页面）
-  window.__arcDebug = { parseExport, parseOneConversation, assetIdFromPointer, computeStats, mdLite };
+  window.__arcDebug = { parseExport, parseOneConversation, assetIdFromPointer, computeStats, mdLite, geminiTsToMs, geminiRecordsToConvs, geminiMergeRecords };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
