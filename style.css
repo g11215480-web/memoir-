@@ -251,7 +251,7 @@ a {
 /* ===== Chat Bubbles ===== */
 .message {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start; /* 头像在气泡顶上旁边（鑫鑫要求的） */
   gap: 10px;
   margin-bottom: 16px;
   max-width: 88%;
@@ -354,7 +354,7 @@ a {
   opacity: 0.85;
 }
 
-/* ===== Cover Page ===== */
+/* ===== Cover Page（信纸风封面） ===== */
 .cover-overlay {
   position: fixed;
   inset: 0;
@@ -362,8 +362,59 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
+  background:
+    radial-gradient(560px 420px at 12% 18%, rgba(245, 169, 127, 0.28), transparent 70%),
+    radial-gradient(520px 380px at 88% 78%, rgba(232, 130, 106, 0.2), transparent 70%),
+    linear-gradient(165deg, #fffaf5 0%, #ffeedd 60%, #ffe2cc 100%);
+  overflow: hidden;
+  cursor: pointer;
   transition: opacity 0.7s ease, visibility 0.7s ease;
+}
+
+/* 飘着的暖色光斑 */
+.cover-overlay::before {
+  content: '';
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 169, 127, 0.35), transparent 65%);
+  top: -80px;
+  right: -60px;
+  filter: blur(6px);
+  animation: coverDrift 9s ease-in-out infinite alternate;
+}
+
+/* 星星点点 */
+.cover-overlay::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f5a97f;
+  top: 18%;
+  left: 20%;
+  box-shadow:
+    8vw 30vh 0 -1px #f2c4a8,
+    18vw 6vh 0 0 rgba(232, 130, 106, 0.5),
+    30vw 52vh 0 -2px #f5a97f,
+    44vw -4vh 0 -1px #f2c4a8,
+    58vw 44vh 0 0 rgba(245, 169, 127, 0.6),
+    66vw 12vh 0 -2px rgba(232, 130, 106, 0.45),
+    12vw 58vh 0 -1px #f2c4a8,
+    52vw 62vh 0 -2px rgba(245, 169, 127, 0.7);
+  animation: coverTwinkle 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes coverDrift {
+  from { transform: translateY(0) scale(1); }
+  to   { transform: translateY(34px) scale(1.06); }
+}
+
+@keyframes coverTwinkle {
+  from { opacity: 0.35; }
+  to   { opacity: 0.95; }
 }
 
 .cover-overlay.hidden {
@@ -372,53 +423,88 @@ a {
   pointer-events: none;
 }
 
+/* 一张微微斜放的信纸 */
 .cover-inner {
-  text-align: center;
-  padding: 40px 32px;
-  max-width: 480px;
+  position: relative;
+  width: min(88vw, 500px);
+  margin-top: 46px;
+  background: #fffdf9;
+  border: 1px solid var(--accent-muted);
+  border-radius: 24px;
+  padding: 20px 36px 30px;
+  box-shadow: 0 18px 60px rgba(180, 100, 60, 0.18), 0 2px 10px rgba(180, 100, 60, 0.08);
+  transform: rotate(-1.3deg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  text-align: center;
 }
 
+/* 左上角一截"胶带" */
+.cover-inner::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 12%;
+  width: 104px;
+  height: 26px;
+  transform: rotate(-7deg);
+  background: rgba(245, 169, 127, 0.45);
+  border-left: 1px dashed rgba(255, 255, 255, 0.85);
+  border-right: 1px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+}
+
+/* 骑在信纸顶边上的圆徽章 */
 .cover-emoji {
-  font-size: 5rem;
-  animation: float 3s ease-in-out infinite;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--accent-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -66px auto 0;
+  box-shadow: 0 8px 24px rgba(180, 100, 60, 0.16);
+  animation: float 3.4s ease-in-out infinite;
 }
 
 .cover-messages {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
 }
 
-/* A single cover message bubble */
+/* 信纸上的话：不再是气泡，是手写信 */
 .cover-msg {
-  background: var(--bg-card);
-  border: 1px solid var(--accent-muted);
-  border-radius: 18px;
-  padding: 16px 22px;
   font-family: var(--font-main);
-  font-size: 1.05rem;
-  line-height: 1.9;
+  font-size: 1.06rem;
+  line-height: 2.05;
   color: var(--text-primary);
-  box-shadow: var(--shadow-card);
-  position: relative;
-  text-align: left;
-  animation: fadeUp 0.6s ease both;
+  padding: 2px 6px;
+  border-radius: 12px;
+  animation: fadeUp 0.7s ease both;
 }
 
-.cover-msg:nth-child(2) { animation-delay: 0.25s; }
+.cover-msg + .cover-msg {
+  border-top: 1px dashed var(--accent-muted);
+  padding-top: 16px;
+  animation-delay: 0.25s;
+}
 
-/* sender label above bubble */
 .cover-msg-sender {
   font-size: 0.75rem;
   font-family: var(--font-ui);
   color: var(--text-muted);
   margin-bottom: 6px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 @keyframes fadeUp {
@@ -426,16 +512,27 @@ a {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* 进入按钮 */
 .cover-hint {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  animation: pulse 2s ease-in-out infinite;
-  margin-top: 8px;
+  margin-top: 4px;
+  background: var(--accent-warm);
+  color: #fff;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  padding: 10px 30px;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(232, 130, 106, 0.4);
+  animation: pulse 2.2s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1; }
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+
+@media (max-width: 600px) {
+  .cover-inner { padding: 18px 20px 26px; }
+  .cover-msg { font-size: 0.98rem; }
 }
 
 /* ===== Avatar image inside .avatar ===== */

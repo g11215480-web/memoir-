@@ -7,9 +7,26 @@
 (function () {
   'use strict';
 
-  const PAGE = 'gpt';
+  const PAGE = (document.body && document.body.dataset.page) || 'gpt';
   const JSZIP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
   const CHUNK = 120; // 每批渲染的消息条数
+
+  // 每个平台的品牌配置（Claude/Gemini 页共用这套引擎）
+  const BRAND = {
+    gpt: {
+      label: 'GPT', color1: '#10a37f', color2: '#34c79d', aiIcon: 'bot',
+      hint: 'ChatGPT → 设置 → 数据控制 → 导出数据，把邮箱收到的 ZIP 直接丢进来',
+    },
+    claude: {
+      label: 'Claude', color1: '#d97757', color2: '#e89a7e', aiIcon: 'blossom',
+      hint: 'claude.ai → 设置(Settings) → 账户(Account) → 导出数据(Export data)，把邮箱收到的 ZIP 丢进来',
+    },
+    gemini: {
+      label: 'Gemini', color1: '#4285f4', color2: '#6fa3f8', aiIcon: 'sparkle',
+      hint: 'Google Takeout 导出',
+    },
+  };
+  const brand = BRAND[PAGE] || BRAND.gpt;
 
   // ===================== 小工具 =====================
   const $ = (id) => document.getElementById(id);
@@ -233,9 +250,9 @@
     convs: [],            // [{id,title,messages:[{role,text,ts}],stats,firstTs,lastTs}]
     metaEntries: [],      // 自定义&记忆 [{kind:'profile'|'instructions'|'memory',text,convTitle,ts}]
     currentView: null,    // 'overview' | 'meta' | convId
-    renderedCount: 0,
+    renderStart: 0,       // 当前对话已渲染区间的起点（区间是 [renderStart, 总长)，从底往上补）
     observer: null,
-    search: { q: '', matches: [], idx: -1 },
+    search: { q: '', matches: [], idx: -1, results: [], ridx: -1 },
     bookmarks: loadBookmarks(),
     filter: '',
   };
@@ -357,7 +374,38 @@
     };
   }
 
-  // 整个 JSON 文本（数组 或 单对话对象）
+  // Claude 官方导出：conversations.json 是 [{uuid,name,created_at,chat_messages:[{sender,text,content,created_at}]}]
+  function parseClaudeConversation(conv) {
+    if (!conv || !Array.isArray(conv.chat_messages)) return null;
+    const title = conv.name || '未命名对话';
+    const convId = conv.uuid || ('claude-' + (conv.created_at || Math.random()));
+    const messages = [];
+    for (const m of conv.chat_messages) {
+      const role = m.sender === 'human' ? 'user' : 'ai';
+      let text = (m.text || '').trim();
+      if (!text && Array.isArray(m.content)) {
+        text = m.content
+          .map(c => (c && c.type === 'text' && c.text) ? c.text : '')
+          .filter(Boolean).join('\n').trim();
+      }
+      if (!text) continue;
+      const ts = m.created_at ? Date.parse(m.created_at) : (conv.created_at ? Date.parse(conv.created_at) : Date.now());
+      messages.push({ role, text, ts });
+    }
+    if (!messages.length) return null;
+    messages.sort((a, b) => a.ts - b.ts);
+    return {
+      conv: {
+        id: convId, title, messages,
+        stats: computeStats(messages),
+        firstTs: messages[0].ts,
+        lastTs: messages[messages.length - 1].ts,
+      },
+      metaEntries: [],
+    };
+  }
+
+  // 整个 JSON 文本（数组 或 单对话对象），自动识别 ChatGPT / Claude 格式
   function parseExport(jsonText) {
     let data;
     try { data = JSON.parse(jsonText); } catch (e) { throw new Error('JSON 格式不对：' + e.message); }
@@ -365,7 +413,9 @@
     const convs = [];
     const metaEntries = [];
     for (const item of list) {
-      const r = parseOneConversation(item);
+      let r = null;
+      if (item && item.mapping) r = parseOneConversation(item);
+      else if (item && Array.isArray(item.chat_messages)) r = parseClaudeConversation(item);
       if (!r) continue;
       if (r.conv.messages.length > 0) convs.push(r.conv);
       metaEntries.push(...r.metaEntries);
@@ -650,7 +700,7 @@
       ? localStorage.getItem('avatar-user')
       : localStorage.getItem('avatar-ai-' + PAGE);
     if (img) return `<img src="${img}" alt="avatar">`;
-    return ic(role === 'user' ? 'user' : 'bot', 20) || (role === 'user' ? '我' : 'TA');
+    return ic(role === 'user' ? 'user' : brand.aiIcon, 20) || (role === 'user' ? '我' : 'TA');
   }
 
   function highlightText(safeText, q) {
@@ -736,6 +786,7 @@
     box.hidden = false;
   }
 
+  // 像聊天软件一样：打开就在最底（最新），往上滑加载更早的
   function renderConversation(convId, jumpToMi) {
     const conv = getConv(convId);
     if (!conv) { renderOverview(); return; }
@@ -743,44 +794,40 @@
 
     const inner = chatInner();
     setToolbarTitle(esc(conv.title));
-    state.renderedCount = 0;
     inner.dataset.convId = convId;
+    state.renderStart = Math.max(0, conv.messages.length - CHUNK);
 
-    // 底部哨兵：滚到就加载下一批
+    // 顶部哨兵：滑到就往前补一批
     const sentinel = document.createElement('div');
     sentinel.className = 'arc-sentinel';
     sentinel.id = 'arc-sentinel';
-
-    renderMore(conv, inner);
     inner.appendChild(sentinel);
+
+    inner.appendChild(buildRangeFrag(conv, state.renderStart, conv.messages.length));
     updateSentinel(conv, sentinel);
+    hydrateImages(inner);
+
+    const chat = $('arc-chat');
+    chat.scrollTop = chat.scrollHeight;
 
     state.observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && state.renderedCount < conv.messages.length) {
-        sentinel.remove();
-        renderMore(conv, inner);
-        inner.appendChild(sentinel);
-        updateSentinel(conv, sentinel);
-      }
-    }, { root: $('arc-chat'), rootMargin: '600px' });
+      if (entries[0].isIntersecting && state.renderStart > 0) prependChunk(conv);
+    }, { root: chat, rootMargin: '600px 0px' });
     state.observer.observe(sentinel);
 
     if (typeof jumpToMi === 'number') jumpToMessage(convId, jumpToMi);
   }
 
   function updateSentinel(conv, sentinel) {
-    const left = conv.messages.length - state.renderedCount;
-    sentinel.textContent = left > 0 ? `下面还有 ${fmtNum(left)} 条 · 继续滚动加载` : '· 到底啦 ·';
+    sentinel.textContent = state.renderStart > 0
+      ? `上面还有 ${fmtNum(state.renderStart)} 条 · 往上滑继续看`
+      : '· 这就是我们的开头啦 ·';
   }
 
-  function renderMore(conv, inner) {
-    const sentinel = $('arc-sentinel');
+  function buildRangeFrag(conv, s, e) {
     const frag = document.createDocumentFragment();
-    const start = state.renderedCount;
-    const end = Math.min(start + CHUNK, conv.messages.length);
-    let prevDate = start > 0 ? fmtDate(conv.messages[start - 1].ts) : null;
-
-    for (let i = start; i < end; i++) {
+    let prevDate = s > 0 ? fmtDate(conv.messages[s - 1].ts) : null;
+    for (let i = s; i < e; i++) {
       const m = conv.messages[i];
       const d = fmtDate(m.ts);
       if (d !== prevDate) {
@@ -792,20 +839,31 @@
       }
       frag.appendChild(buildBubble(conv.id, i, m));
     }
-    state.renderedCount = end;
-    if (sentinel && sentinel.parentNode === inner) inner.insertBefore(frag, sentinel);
-    else inner.appendChild(frag);
+    return frag;
+  }
+
+  // 往前补渲染到 toIndex（不传就补一批），并保持滚动位置不跳
+  function prependChunk(conv, toIndex) {
+    const inner = $('arc-chat-inner');
+    const chat = $('arc-chat');
+    const sentinel = $('arc-sentinel');
+    if (!inner || !sentinel) return;
+    const newStart = toIndex !== undefined
+      ? Math.max(0, Math.min(toIndex, state.renderStart))
+      : Math.max(0, state.renderStart - CHUNK);
+    if (newStart >= state.renderStart) return;
+
+    const frag = buildRangeFrag(conv, newStart, state.renderStart);
+    const before = chat.scrollHeight;
+    sentinel.after(frag);
+    state.renderStart = newStart;
+    chat.scrollTop += chat.scrollHeight - before;
+    updateSentinel(conv, sentinel);
     hydrateImages(inner);
   }
 
   function ensureRendered(conv, mi) {
-    const inner = $('arc-chat-inner');
-    let guard = 0;
-    while (state.renderedCount <= mi && state.renderedCount < conv.messages.length && guard++ < 2000) {
-      renderMore(conv, inner);
-    }
-    const sentinel = $('arc-sentinel');
-    if (sentinel) { inner.appendChild(sentinel); updateSentinel(conv, sentinel); }
+    if (mi < state.renderStart) prependChunk(conv, mi);
   }
 
   function jumpToMessage(convId, mi) {
@@ -864,7 +922,7 @@
           <span class="arc-bm-time">${fmtDate(b.ts)} ${fmtTime(b.ts)}</span>
           <button class="arc-bm-del" title="删除书签">✕</button>
         </div>
-        <div class="arc-bm-text">${ic(b.role === 'user' ? 'user' : 'bot', 13)} ${esc(b.snippet)}</div>
+        <div class="arc-bm-text">${ic(b.role === 'user' ? 'user' : brand.aiIcon, 13)} ${esc(b.snippet)}</div>
       </div>`).join('');
 
     box.querySelectorAll('.arc-bm-item').forEach(el => {
@@ -883,10 +941,18 @@
     });
   }
 
-  // ===================== 窗口内搜索 =====================
+  // ===================== 搜索（本对话 / 全部对话） =====================
+  function searchScope() {
+    const sel = $('arc-search-scope');
+    return sel ? sel.value : 'conv';
+  }
+
   function openSearch() {
-    const conv = getConv(state.currentView);
-    if (!conv) return; // 只在对话视图里搜索
+    // 不在对话视图时自动切成"全部对话"
+    if (!getConv(state.currentView)) {
+      const sel = $('arc-search-scope');
+      if (sel) sel.value = 'all';
+    }
     $('arc-searchbar').hidden = false;
     $('arc-search-input').focus();
   }
@@ -896,53 +962,131 @@
     if (!bar || bar.hidden) return;
     bar.hidden = true;
     $('arc-search-input').value = '';
+    $('arc-search-results').hidden = true;
     const hadQuery = !!state.search.q;
-    state.search = { q: '', matches: [], idx: -1 };
+    state.search = { q: '', matches: [], idx: -1, results: [], ridx: -1 };
     updateSearchCount();
     // 清掉高亮：重渲染当前对话
     if (hadQuery && getConv(state.currentView)) renderConversation(state.currentView);
+  }
+
+  function snippetAround(text, pos, qLen) {
+    const start = Math.max(0, pos - 34);
+    const end = Math.min(text.length, pos + qLen + 46);
+    return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+  }
+
+  function globalSearch(q) {
+    const ql = q.toLowerCase();
+    const res = [];
+    for (const c of state.convs) {
+      for (let i = 0; i < c.messages.length; i++) {
+        const m = c.messages[i];
+        const pos = m.text.toLowerCase().indexOf(ql);
+        if (pos < 0) continue;
+        res.push({ convId: c.id, mi: i, title: c.title, ts: m.ts, role: m.role, snippet: snippetAround(m.text, pos, q.length) });
+        if (res.length >= 300) return res;
+      }
+    }
+    return res;
+  }
+
+  function renderSearchResults() {
+    const box = $('arc-search-results');
+    const { results, q } = state.search;
+    if (!q || searchScope() !== 'all') { box.hidden = true; return; }
+    if (!results.length) {
+      box.innerHTML = '<div class="arc-bm-empty">全部对话里都没找到</div>';
+      box.hidden = false;
+      return;
+    }
+    box.innerHTML = results.map((r, i) => `
+      <div class="arc-sr-item" data-i="${i}">
+        <div class="arc-bm-head">
+          <span class="arc-bm-conv">${esc(r.title)}</span>
+          <span class="arc-bm-time">${fmtDate(r.ts)} ${fmtTime(r.ts)}</span>
+        </div>
+        <div class="arc-bm-text">${highlightText(esc(r.snippet), q)}</div>
+      </div>`).join('');
+    box.hidden = false;
+    box.querySelectorAll('.arc-sr-item').forEach(el => {
+      el.addEventListener('click', () => {
+        box.hidden = true;
+        searchGo(parseInt(el.dataset.i));
+      });
+    });
   }
 
   let searchTimer = null;
   function onSearchInput(val) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
+      const q = val.trim();
+      state.search.q = q;
+
+      if (searchScope() === 'all') {
+        state.search.results = q ? globalSearch(q) : [];
+        state.search.ridx = -1;
+        state.search.matches = [];
+        renderSearchResults();
+        updateSearchCount();
+        return;
+      }
+
       const conv = getConv(state.currentView);
       if (!conv) return;
-      state.search.q = val.trim();
+      $('arc-search-results').hidden = true;
       state.search.matches = [];
       state.search.idx = -1;
-      if (state.search.q) {
-        const q = state.search.q.toLowerCase();
+      if (q) {
+        const ql = q.toLowerCase();
         conv.messages.forEach((m, i) => {
-          if (m.text.toLowerCase().includes(q)) state.search.matches.push(i);
+          if (m.text.toLowerCase().includes(ql)) state.search.matches.push(i);
         });
       }
-      // 重渲染（带高亮）
+      // 重渲染（带高亮），从最近的一处开始往前翻
       renderConversation(state.currentView);
       updateSearchCount();
-      if (state.search.matches.length) searchGo(0);
+      if (state.search.matches.length) searchGo(state.search.matches.length - 1);
     }, 250);
   }
 
   function updateSearchCount() {
     const el = $('arc-search-count');
     if (!el) return;
-    const { matches, idx } = state.search;
-    el.textContent = matches.length ? `${idx + 1} / ${matches.length}` : (state.search.q ? '0 处' : '');
+    const s = state.search;
+    if (searchScope() === 'all') {
+      el.textContent = s.results.length
+        ? (s.ridx >= 0 ? `${s.ridx + 1} / ${s.results.length}` : `${s.results.length} 条`)
+        : (s.q ? '0 条' : '');
+    } else {
+      el.textContent = s.matches.length ? `${s.idx + 1} / ${s.matches.length}` : (s.q ? '0 处' : '');
+    }
   }
 
-  function searchGo(newIdx) {
-    const { matches } = state.search;
-    if (!matches.length) return;
-    state.search.idx = ((newIdx % matches.length) + matches.length) % matches.length;
-    updateSearchCount();
-    const mi = matches[state.search.idx];
-    jumpToMessage(state.currentView, mi);
-    // 当前命中的 mark 加强调
+  function highlightCurrentMark(mi) {
     document.querySelectorAll('mark.arc-mark-current').forEach(m => m.classList.remove('arc-mark-current'));
     const el = document.querySelector(`#arc-chat-inner .message[data-mi="${mi}"] mark.arc-mark`);
     if (el) el.classList.add('arc-mark-current');
+  }
+
+  function searchGo(newIdx) {
+    const s = state.search;
+    if (searchScope() === 'all') {
+      if (!s.results.length) return;
+      s.ridx = ((newIdx % s.results.length) + s.results.length) % s.results.length;
+      updateSearchCount();
+      const r = s.results[s.ridx];
+      jumpToMessage(r.convId, r.mi);
+      highlightCurrentMark(r.mi);
+      return;
+    }
+    if (!s.matches.length) return;
+    s.idx = ((newIdx % s.matches.length) + s.matches.length) % s.matches.length;
+    updateSearchCount();
+    const mi = s.matches[s.idx];
+    jumpToMessage(state.currentView, mi);
+    highlightCurrentMark(mi);
   }
 
   // ===================== 导出 =====================
@@ -1105,12 +1249,17 @@
         </div>
 
         <div class="arc-searchbar" id="arc-searchbar" hidden>
-          <input class="arc-search-input" id="arc-search-input" type="text" placeholder="搜索这个对话里的内容…" />
+          <select id="arc-search-scope" class="arc-search-scope" title="搜索范围">
+            <option value="conv">本对话</option>
+            <option value="all">全部对话</option>
+          </select>
+          <input class="arc-search-input" id="arc-search-input" type="text" placeholder="想找哪句话…" />
           <span class="arc-search-count" id="arc-search-count"></span>
           <button class="arc-search-nav" id="arc-search-prev" title="上一处">${ic('chevUp', 14)}</button>
           <button class="arc-search-nav" id="arc-search-next" title="下一处">${ic('chevDown', 14)}</button>
           <button class="arc-search-nav" id="arc-search-close" title="关闭">${ic('close', 13)}</button>
         </div>
+        <div class="arc-search-results" id="arc-search-results" hidden></div>
 
         <div class="arc-chat" id="arc-chat"><div class="arc-chat-inner" id="arc-chat-inner"></div></div>
       </section>
@@ -1188,11 +1337,12 @@
       <div class="arc-modal" id="arc-upload-modal" hidden>
         <div class="arc-modal-mask" data-close="arc-upload-modal"></div>
         <div class="arc-modal-box">
-          <div class="arc-modal-title"><span>${ic('upload', 16)} 导入 GPT 记录</span>
+          <div class="arc-modal-title"><span>${ic('upload', 16)} 导入 ${brand.label} 记录</span>
             <button class="arc-modal-close" data-close="arc-upload-modal">✕</button></div>
           <p style="font-size:13px;color:#8a7f70;margin:0 0 14px;line-height:1.7;">
-            ChatGPT → 设置 → 数据控制 → 导出数据，把邮箱收到的 ZIP 直接丢进来<br>
-            <small>也支持 conversations.json / 单对话 JSON / 本站备份 JSON · 重复自动去重</small>
+            ${brand.hint}<br>
+            <small>也支持 conversations.json / 单对话 JSON / 本站备份 JSON · 重复自动去重</small><br>
+            <small>记录存在浏览器里，要用固定的网址打开才看得到——用桌面的「打开回忆录」启动器就永远不会丢</small>
           </p>
           <div class="arc-upload-zone" id="arc-upload-zone">
             <input type="file" id="arc-file-input" multiple accept=".json,.zip" style="display:none" />
@@ -1267,18 +1417,23 @@
     });
 
     // 搜索
+    const curSearchIdx = () => (searchScope() === 'all' ? state.search.ridx : state.search.idx);
     $('arc-search-input').addEventListener('input', (e) => onSearchInput(e.target.value));
     $('arc-search-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') searchGo(state.search.idx + (e.shiftKey ? -1 : 1));
+      if (e.key === 'Enter') searchGo(curSearchIdx() + (e.shiftKey ? -1 : 1));
       if (e.key === 'Escape') closeSearch();
     });
-    $('arc-search-prev').addEventListener('click', () => searchGo(state.search.idx - 1));
-    $('arc-search-next').addEventListener('click', () => searchGo(state.search.idx + 1));
+    $('arc-search-scope').addEventListener('change', () => {
+      onSearchInput($('arc-search-input').value);
+      $('arc-search-input').focus();
+    });
+    $('arc-search-prev').addEventListener('click', () => searchGo(curSearchIdx() - 1));
+    $('arc-search-next').addEventListener('click', () => searchGo(curSearchIdx() + 1));
     $('arc-search-close').addEventListener('click', closeSearch);
 
-    // Ctrl/Cmd+F 打开窗口内搜索（只在对话视图）
+    // Ctrl/Cmd+F 打开搜索（有记录就能搜）
     document.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f' && getConv(state.currentView)) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f' && state.convs.length) {
         e.preventDefault();
         openSearch();
       }
@@ -1383,15 +1538,18 @@
     if (state.currentView === 'overview') renderOverview();
     else if (state.currentView === 'meta') renderMeta();
     else if (getConv(state.currentView)) {
-      const kept = state.renderedCount;
-      renderConversation(state.currentView);
       const conv = getConv(state.currentView);
-      ensureRendered(conv, Math.min(kept, conv.messages.length) - 1);
+      const kept = state.renderStart;
+      const chat = $('arc-chat');
+      const fromBottom = chat ? (chat.scrollHeight - chat.scrollTop) : 0;
+      renderConversation(state.currentView);
+      if (kept < state.renderStart) prependChunk(conv, kept);
+      if (chat) chat.scrollTop = chat.scrollHeight - fromBottom; // 尽量停在原来的位置
     }
   }
 
   function showApp() {
-    const sample = $('gpt-sample');
+    const sample = $('arc-sample') || $('gpt-sample');
     if (sample) sample.hidden = true;
     const fab = $('arc-empty-fab');
     if (fab) fab.remove();
@@ -1404,14 +1562,13 @@
     const btn = document.createElement('button');
     btn.id = 'arc-empty-fab';
     btn.innerHTML = ic('upload', 22) || '导入';
-    btn.style.color = '#fff';
-    btn.title = '导入 GPT 记录';
+    btn.title = `导入 ${brand.label} 记录`;
     btn.style.cssText = `
       position: fixed; bottom: 148px; right: 28px;
       width: 48px; height: 48px; border-radius: 50%;
-      background: linear-gradient(135deg, #10a37f, #34c79d);
-      border: none; box-shadow: 0 4px 12px rgba(16,163,127,0.4);
-      cursor: pointer; font-size: 20px; z-index: 300; transition: transform 0.2s;`;
+      background: linear-gradient(135deg, ${brand.color1}, ${brand.color2});
+      border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      color: #fff; cursor: pointer; font-size: 20px; z-index: 300; transition: transform 0.2s;`;
     btn.onmouseenter = () => btn.style.transform = 'scale(1.1)';
     btn.onmouseleave = () => btn.style.transform = 'scale(1)';
     btn.onclick = () => openModal('arc-upload-modal');
@@ -1420,6 +1577,7 @@
 
   // ===================== 启动 =====================
   async function init() {
+    if (!$('archive-app')) return; // 这个页面没接档案馆就不启动
     buildAppUI();
     applyTheme();
 

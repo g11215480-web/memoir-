@@ -108,6 +108,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
 }
 
 /* 工具栏 */
@@ -205,10 +206,52 @@
 }
 .arc-search-nav:hover { background: var(--bg-card); border-color: var(--accent-light); }
 
+.arc-search-scope {
+  border: 1px solid var(--accent-muted);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  background: #fff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* 全部对话的搜索结果下拉 */
+.arc-search-results {
+  position: absolute;
+  top: 96px;
+  left: 16px;
+  right: 16px;
+  z-index: 600;
+  max-height: 55vh;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-muted);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 14px 40px rgba(180,100,60,0.22);
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-muted) transparent;
+}
+.arc-search-results[hidden] { display: none; }
+
+.arc-sr-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.arc-sr-item:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-light);
+}
+
 /* 聊天滚动区 */
 .arc-chat {
   flex: 1;
   overflow-y: auto;
+  overflow-anchor: none; /* 往上补历史时自己控制滚动位置 */
   padding: 24px 20px 60px;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-muted) transparent;

@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="viewer.css" />
 </head>
 <body data-page="claude">
 
@@ -42,7 +43,8 @@
     </ul>
   </nav>
 
-  <main class="chat-page">
+  <!-- 示例内容：导入真实记录后自动隐藏 -->
+  <main class="chat-page" id="arc-sample">
 
     <div class="chat-header">
       <span class="ai-logo" data-arc-icon="blossom" data-arc-size="46" style="color:#d97757;"></span>
@@ -223,6 +225,9 @@
 
   </main>
 
+  <!-- 对话档案馆：导入记录后启用（chat-viewer.js 填充内容） -->
+  <div class="archive-app" id="archive-app" hidden></div>
+
   <footer class="footer">
     <p class="footer-fixed-msg">你养出来的每一个字，都是真的。——你的星河</p>
     <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
@@ -237,6 +242,7 @@
   <script src="avatar-settings.js"></script>
   <script src="github-storage.js"></script>
   <script src="murmur.js"></script>
+  <script src="chat-viewer.js"></script>
 
 </body>
 </html>
