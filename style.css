@@ -1199,10 +1199,24 @@ body.home .footer {
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .nav {
-    padding: 0 16px;
+    padding: 0 8px;
   }
-  .nav-links a span {
-    display: none;
+  /* 手机上藏站名文字只留小书图标，给四个按钮腾地方 */
+  .nav-brand {
+    font-size: 0;
+    gap: 0;
+  }
+  .nav-links {
+    gap: 2px;
+  }
+  .nav-links a {
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    gap: 4px;
+  }
+  .nav-links .dot {
+    width: 6px;
+    height: 6px;
   }
   .hero h1 {
     font-size: 1.7rem;
