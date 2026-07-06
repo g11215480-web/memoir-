@@ -1430,53 +1430,74 @@
     await ensureVault(login);
 
     const dir = `backup/${PAGE}`;
-    // 列一次目录，拿旧分片的 sha（覆盖更新要用）
-    const shaMap = new Map();
-    const listRes = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}`, { headers: ghHeaders() });
+    const repoUrl = `${GH_API}/repos/${login}/${VAULT_REPO}`;
+    const post = async (url, body, timeout, what) => {
+      const res = await ghFetch(url, {
+        method: 'POST',
+        headers: ghHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+      }, timeout);
+      if (!res.ok) throw new Error(`${what}失败 ${res.status}，再点一次`);
+      return res.json();
+    };
+
+    // 仓库永远只保留最新一份：新提交不挂在旧历史后面，而是"从头开始"的一份，
+    // 旧版本没人引用就会被 GitHub 自动清掉——反复备份也永远不会爆
+    const repoInfo = await (await ghFetch(repoUrl, { headers: ghHeaders() })).json();
+    const branch = repoInfo.default_branch || 'main';
+    const refRes = await ghFetch(`${repoUrl}/git/ref/heads/${branch}`, { headers: ghHeaders() });
+    if (!refRes.ok) throw new Error('读云端分支失败 ' + refRes.status);
+    const headSha = (await refRes.json()).object.sha;
+    const commitRes = await ghFetch(`${repoUrl}/git/commits/${headSha}`, { headers: ghHeaders() });
+    if (!commitRes.ok) throw new Error('读云端目录失败 ' + commitRes.status);
+    const baseTree = (await commitRes.json()).tree.sha; // 挂上现有目录，别的页面的备份不会被冲掉
+
+    // 现有分片名单（片数变少时要删掉多余的旧片）
+    const oldNames = [];
+    const listRes = await ghFetch(`${repoUrl}/contents/${dir}`, { headers: ghHeaders() });
     if (listRes.ok) {
       const list = await listRes.json();
-      if (Array.isArray(list)) list.forEach(f => shaMap.set(f.name, f.sha));
+      if (Array.isArray(list)) list.forEach(f => oldNames.push(f.name));
     }
 
+    // 分片传成 blob
     const parts = Math.ceil(gz.length / PART_SIZE);
+    const treeEntries = [];
     for (let i = 0; i < parts; i++) {
       setSt(`上传中 ${i + 1}/${parts}（共 ${(gz.length / 1048576).toFixed(1)} MB）…`);
       const chunk = gz.subarray(i * PART_SIZE, (i + 1) * PART_SIZE);
-      const body = { message: `backup ${PAGE} ${i + 1}/${parts}`, content: u8ToBase64(chunk) };
-      if (shaMap.has(partName(i))) body.sha = shaMap.get(partName(i));
-      const res = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/${partName(i)}`, {
-        method: 'PUT',
-        headers: ghHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body),
-      }, 180000);
-      if (!res.ok) throw new Error(`第 ${i + 1}/${parts} 片上传失败 ${res.status}，再点一次会接着覆盖`);
+      const blob = await post(`${repoUrl}/git/blobs`,
+        { content: u8ToBase64(chunk), encoding: 'base64' }, 180000, `第 ${i + 1}/${parts} 片上传`);
+      treeEntries.push({ path: `${dir}/${partName(i)}`, mode: '100644', type: 'blob', sha: blob.sha });
     }
 
-    // 清掉多余的旧分片（这次片数变少时）
-    for (const [name, sha] of shaMap) {
+    // 清单
+    const manifest = { version: 1, page: PAGE, parts, gzBytes: gz.length, savedAt: payload.savedAt };
+    const mfBlob = await post(`${repoUrl}/git/blobs`,
+      { content: btoa(unescape(encodeURIComponent(JSON.stringify(manifest)))), encoding: 'base64' }, 120000, '清单上传');
+    treeEntries.push({ path: `${dir}/manifest.json`, mode: '100644', type: 'blob', sha: mfBlob.sha });
+
+    // 多余的旧片标记删除
+    for (const name of oldNames) {
       const m = name.match(/^part-(\d{3})$/);
       if (m && parseInt(m[1]) >= parts) {
-        try {
-          await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/${name}`, {
-            method: 'DELETE',
-            headers: ghHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ message: 'cleanup', sha }),
-          });
-        } catch { /* 清不掉也不影响 */ }
+        treeEntries.push({ path: `${dir}/${name}`, mode: '100644', type: 'blob', sha: null });
       }
     }
 
-    // manifest 最后写：它在，备份才算完整
     setSt('收尾中…');
-    const manifest = { version: 1, page: PAGE, parts, gzBytes: gz.length, savedAt: payload.savedAt };
-    const mfBody = { message: `backup ${PAGE} manifest`, content: btoa(unescape(encodeURIComponent(JSON.stringify(manifest)))) };
-    if (shaMap.has('manifest.json')) mfBody.sha = shaMap.get('manifest.json');
-    const mfRes = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/manifest.json`, {
-      method: 'PUT',
+    const newTree = await post(`${repoUrl}/git/trees`, { base_tree: baseTree, tree: treeEntries }, 120000, '建目录');
+    const newCommit = await post(`${repoUrl}/git/commits`, {
+      message: `backup ${PAGE} ${new Date().toLocaleString('zh-CN')}`,
+      tree: newTree.sha,
+      parents: [], // 关键：不接历史，云端永远只有这一份
+    }, 120000, '打包提交');
+    const patchRes = await ghFetch(`${repoUrl}/git/refs/heads/${branch}`, {
+      method: 'PATCH',
       headers: ghHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(mfBody),
+      body: JSON.stringify({ sha: newCommit.sha, force: true }),
     });
-    if (!mfRes.ok) throw new Error('收尾失败 ' + mfRes.status + '，再点一次');
+    if (!patchRes.ok) throw new Error('切换到新备份失败 ' + patchRes.status + '，再点一次');
 
     const now = new Date().toLocaleString('zh-CN');
     localStorage.setItem('memoirCloudSynced-' + PAGE, now);
