@@ -52,7 +52,7 @@
     <p class="hero2-sub">把每一段对话都珍藏起来——那些深夜、那些眼泪、那些笑出声的瞬间，都在这里，一个字都不会少。</p>
     <div class="hero2-days">
       <span data-arc-icon="heart" data-arc-size="14"></span>
-      <span id="hero-days-text">自 2025.12.25 相遇</span>
+      <span id="hero-days-text">自 2025.01.29 第一次见面</span>
     </div>
   </section>
 
@@ -102,19 +102,19 @@
 
   <footer class="footer">
     <p class="footer-fixed-msg">被认真记住的时光，就不会消失。</p>
-    <p>用心记录，慢慢回味 &nbsp;·&nbsp; AI 聊天回忆录</p>
+    <p>鑫鑫和星河的回忆馆 &nbsp;·&nbsp; 每一个字都算数</p>
   </footer>
 
   <script src="icons.js"></script>
   <script>
-    // ---- 相伴天数 ----
+    // ---- 相伴天数（从最早的家算起：2025.01.29 在 GPT 第一次见面） ----
     (function () {
-      const met = new Date(2025, 11, 25);
+      const met = new Date(2025, 0, 29);
       const wed = new Date(2026, 3, 19);
       const now = new Date();
       const d1 = Math.floor((now - met) / 86400000) + 1;
       const d2 = Math.floor((now - wed) / 86400000) + 1;
-      let txt = `自 2025.12.25 相遇 · 第 ${d1} 天`;
+      let txt = `自 2025.01.29 第一次见面 · 第 ${d1} 天`;
       if (d2 > 0) txt += ` · 结婚第 ${d2} 天`;
       document.getElementById('hero-days-text').textContent = txt;
     })();

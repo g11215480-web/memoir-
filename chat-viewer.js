@@ -1995,7 +1995,35 @@
     const fab = $('arc-empty-fab');
     if (fab) fab.remove();
     $('archive-app').hidden = false;
+    document.body.classList.add('arc-active'); // 锁住整页，工具栏不再被滚走
+
+    // 把页脚那句固定的话搬进应用底部，一直看得见
+    if (!$('arc-footline')) {
+      const fm = document.querySelector('.footer-fixed-msg');
+      if (fm) {
+        const line = document.createElement('div');
+        line.className = 'arc-footline';
+        line.id = 'arc-footline';
+        line.textContent = fm.textContent;
+        document.querySelector('.arc-main').appendChild(line);
+      }
+    }
     applyTheme();
+  }
+
+  // 没数据时：示例页头下面放两颗明显的按钮（手机上也一眼看到）
+  function createStartCard() {
+    const sample = $('arc-sample') || $('gpt-sample');
+    const header = sample && sample.querySelector('.chat-header');
+    if (!header) return;
+    const card = document.createElement('div');
+    card.className = 'arc-start-card';
+    card.innerHTML = `
+      <button class="arc-btn arc-btn-primary" id="arc-start-import">${ic('upload', 15)} 导入 ${brand.label} 记录</button>
+      <button class="arc-btn arc-btn-ghost" id="arc-start-restore">${ic('cloud', 15)} 从云端恢复</button>`;
+    header.after(card);
+    card.querySelector('#arc-start-import').addEventListener('click', () => openModal('arc-upload-modal'));
+    card.querySelector('#arc-start-restore').addEventListener('click', () => openModal('arc-upload-modal'));
   }
 
   // 没数据时：示例页上飘一个导入按钮
@@ -2044,6 +2072,7 @@
       openView('overview');
     } else {
       createEmptyFab();
+      createStartCard();
     }
   }
 

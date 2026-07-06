@@ -4,9 +4,48 @@
 .archive-app {
   display: flex;
   height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
   background: var(--bg-primary);
 }
 .archive-app[hidden] { display: none; }
+
+/* 档案馆启用时：整页锁定不滚动，工具栏永远在原地 */
+body.arc-active { overflow: hidden; }
+body.arc-active .footer { display: none; }
+
+/* 底部固定的那句话搬进应用里，一直看得见 */
+.arc-footline {
+  text-align: center;
+  font-family: var(--font-main);
+  font-size: 0.78rem;
+  color: var(--accent-warm);
+  opacity: 0.85;
+  padding: 6px 14px;
+  border-top: 1px solid var(--accent-muted);
+  background: rgba(255, 248, 243, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+/* 空状态的引导卡：导入 / 云端恢复 一眼就能看到 */
+.arc-start-card {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: -14px 0 30px;
+}
+.arc-start-card .arc-btn {
+  padding: 11px 22px;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+}
 
 /* ---- 侧栏 ---- */
 .arc-sidebar {
