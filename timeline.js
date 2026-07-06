@@ -130,6 +130,15 @@
 
     $('tl-prev').onclick = () => { if (cur > 0) { cur--; sync(); } };
     $('tl-next').onclick = () => { if (cur < dates.length - 1) { cur++; sync(); } };
+    // 时光机：随便跳去有记忆的一天
+    $('tl-random').onclick = () => {
+      if (dates.length < 2) return;
+      let r = cur;
+      while (r === cur) r = Math.floor(Math.random() * dates.length);
+      cur = r;
+      sync();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     const filters = $('tl-filters');
     filters.innerHTML = [...hasData].map(p => {
