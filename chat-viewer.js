@@ -1567,6 +1567,17 @@
     showApp();
     renderSidebar();
     openView('overview');
+
+    // 存过钥匙的话，导入完自动备份到云端（手机那边恢复一下就是最新的）
+    if (ghToken()) {
+      const cloudSt = (t, err) => {
+        const el = $('arc-cloud-status');
+        if (el) { el.textContent = t; el.style.color = err ? '#c0392b' : '#8a7f70'; }
+      };
+      cloudBackup(cloudSt)
+        .then(t => cloudSt('已自动备份到云端 · ' + t))
+        .catch(e => cloudSt('自动云备份没成功（手动点一下"备份到云端"）：' + e.message, true));
+    }
   }
 
   // ===================== UI 骨架 =====================
