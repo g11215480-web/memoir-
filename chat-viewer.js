@@ -1397,6 +1397,24 @@
     return hit ? hit.sha : undefined;
   }
 
+  // 带超时的 fetch：代理把请求黑洞时不会永远卡住按钮
+  async function ghFetch(url, opts, timeoutMs) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs || 120000);
+    try {
+      return await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('请求超时（多半是代理拦了），再点一次试试');
+      throw new Error('网络错误：' + e.message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // 压缩后切成小片上传——片小代理就不拦，大档案也传得动
+  const PART_SIZE = 3 * 1024 * 1024;
+  const partName = (i) => `part-${String(i).padStart(3, '0')}`;
+
   async function cloudBackup(setSt) {
     if (!ghToken()) throw new Error('先填 GitHub Token（和右下角"记忆库"用同一个）');
     if (!state.convs.length) throw new Error('还没有记录，先导入再备份');
@@ -1408,19 +1426,58 @@
       bookmarks: state.bookmarks, theme,
     };
     const gz = window.pako.gzip(JSON.stringify(payload));
-    setSt(`压缩好了（${(gz.length / 1048576).toFixed(1)} MB），上传中…`);
     const login = await ghUser();
     await ensureVault(login);
-    const path = `backup/memoir-${PAGE}.json.gz`;
-    const sha = await vaultSha(login, path);
-    const body = { message: `backup ${PAGE} ${new Date().toLocaleString('zh-CN')}`, content: u8ToBase64(gz) };
-    if (sha) body.sha = sha;
-    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${path}`, {
+
+    const dir = `backup/${PAGE}`;
+    // 列一次目录，拿旧分片的 sha（覆盖更新要用）
+    const shaMap = new Map();
+    const listRes = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}`, { headers: ghHeaders() });
+    if (listRes.ok) {
+      const list = await listRes.json();
+      if (Array.isArray(list)) list.forEach(f => shaMap.set(f.name, f.sha));
+    }
+
+    const parts = Math.ceil(gz.length / PART_SIZE);
+    for (let i = 0; i < parts; i++) {
+      setSt(`上传中 ${i + 1}/${parts}（共 ${(gz.length / 1048576).toFixed(1)} MB）…`);
+      const chunk = gz.subarray(i * PART_SIZE, (i + 1) * PART_SIZE);
+      const body = { message: `backup ${PAGE} ${i + 1}/${parts}`, content: u8ToBase64(chunk) };
+      if (shaMap.has(partName(i))) body.sha = shaMap.get(partName(i));
+      const res = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/${partName(i)}`, {
+        method: 'PUT',
+        headers: ghHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+      }, 180000);
+      if (!res.ok) throw new Error(`第 ${i + 1}/${parts} 片上传失败 ${res.status}，再点一次会接着覆盖`);
+    }
+
+    // 清掉多余的旧分片（这次片数变少时）
+    for (const [name, sha] of shaMap) {
+      const m = name.match(/^part-(\d{3})$/);
+      if (m && parseInt(m[1]) >= parts) {
+        try {
+          await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/${name}`, {
+            method: 'DELETE',
+            headers: ghHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ message: 'cleanup', sha }),
+          });
+        } catch { /* 清不掉也不影响 */ }
+      }
+    }
+
+    // manifest 最后写：它在，备份才算完整
+    setSt('收尾中…');
+    const manifest = { version: 1, page: PAGE, parts, gzBytes: gz.length, savedAt: payload.savedAt };
+    const mfBody = { message: `backup ${PAGE} manifest`, content: btoa(unescape(encodeURIComponent(JSON.stringify(manifest)))) };
+    if (shaMap.has('manifest.json')) mfBody.sha = shaMap.get('manifest.json');
+    const mfRes = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/${dir}/manifest.json`, {
       method: 'PUT',
       headers: ghHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body),
+      body: JSON.stringify(mfBody),
     });
-    if (!res.ok) throw new Error('上传失败 ' + res.status);
+    if (!mfRes.ok) throw new Error('收尾失败 ' + mfRes.status + '，再点一次');
+
     const now = new Date().toLocaleString('zh-CN');
     localStorage.setItem('memoirCloudSynced-' + PAGE, now);
     return now;
@@ -1431,13 +1488,37 @@
     setSt('从云端下载中…');
     await loadPako();
     const login = await ghUser();
-    const res = await fetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/backup/memoir-${PAGE}.json.gz`, {
+
+    let buf = null;
+    // 新版：分片备份（读 manifest 再一片片下）
+    const mfRes = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/backup/${PAGE}/manifest.json`, {
       headers: ghHeaders({ Accept: 'application/vnd.github.raw' }),
     });
-    if (res.status === 404) throw new Error('云端还没有这一页的备份，先备份一次');
-    if (!res.ok) throw new Error('下载失败 ' + res.status);
-    const buf = new Uint8Array(await res.arrayBuffer());
-    setSt('解包中…');
+    if (mfRes.ok) {
+      const mf = JSON.parse(await mfRes.text());
+      const chunks = [];
+      for (let i = 0; i < mf.parts; i++) {
+        setSt(`下载中 ${i + 1}/${mf.parts}…`);
+        const r = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/backup/${PAGE}/${partName(i)}`, {
+          headers: ghHeaders({ Accept: 'application/vnd.github.raw' }),
+        }, 180000);
+        if (!r.ok) throw new Error(`第 ${i + 1} 片下载失败 ${r.status}`);
+        chunks.push(new Uint8Array(await r.arrayBuffer()));
+      }
+      buf = new Uint8Array(mf.gzBytes);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+    } else {
+      // 老版：整个一坨的备份文件
+      const res = await ghFetch(`${GH_API}/repos/${login}/${VAULT_REPO}/contents/backup/memoir-${PAGE}.json.gz`, {
+        headers: ghHeaders({ Accept: 'application/vnd.github.raw' }),
+      }, 300000);
+      if (res.status === 404) throw new Error('云端还没有这一页的备份，先在有记录的设备上备份一次');
+      if (!res.ok) throw new Error('下载失败 ' + res.status);
+      buf = new Uint8Array(await res.arrayBuffer());
+    }
+
+    setSt('解包中（大档案要几十秒，别关页面）…');
     const payload = JSON.parse(window.pako.ungzip(buf, { to: 'string' }));
     if (!payload || !Array.isArray(payload.conversations)) throw new Error('云端备份格式不对');
 
