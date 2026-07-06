@@ -201,7 +201,7 @@
       const defaults = DEFAULTS[activeTab]?.[cat] || [];
       const custom   = getCustomLines(activeTab, cat);
       const isNsfw   = cat === '色色';
-      const label    = isNsfw ? '🔞 私密' : cat;
+      const label    = isNsfw ? `${window.ArcIcons ? window.ArcIcons.icon('lock', 13) : ''} 私密` : cat;
       return `
         <div class="murmur-cat-section${isNsfw ? ' murmur-nsfw-section' : ''}">
           <div class="murmur-cat-head">
@@ -241,7 +241,7 @@
   function injectUI() {
     const s = getSettings();
     document.body.insertAdjacentHTML('beforeend', `
-      <button class="murmur-fab" title="碎碎念" onclick="window.__murmurToggle()">💬</button>
+      <button class="murmur-fab" title="碎碎念" onclick="window.__murmurToggle()">${window.ArcIcons ? window.ArcIcons.icon('chat', 20) : '💬'}</button>
 
       <div class="murmur-panel" id="murmur-panel">
         <div class="murmur-panel-header">
@@ -275,7 +275,7 @@
             </label>`).join('')}
           <label class="murmur-cat-item murmur-nsfw">
             <input type="checkbox" ${s.nsfw?'checked':''} onchange="window.__murmurSetNsfw(this.checked)">
-            <span>🔞 私密</span>
+            <span>${window.ArcIcons ? window.ArcIcons.icon('lock', 13) : ''} 私密</span>
           </label>
         </div>
 

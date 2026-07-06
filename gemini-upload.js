@@ -46,7 +46,7 @@
     // 上传按钮（放在页面右下角，和其他按钮一起）
     const uploadBtn = document.createElement('button');
     uploadBtn.className = 'float-btn upload-btn';
-    uploadBtn.innerHTML = '📤';
+    uploadBtn.innerHTML = window.ArcIcons ? window.ArcIcons.icon('upload', 20) : '📤';
     uploadBtn.title = '上传 Gemini 记录';
     uploadBtn.style.cssText = `
       position: fixed;
@@ -60,6 +60,7 @@
       box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
       cursor: pointer;
       font-size: 20px;
+      color: #fff;
       z-index: 1000;
       transition: transform 0.2s, box-shadow 0.2s;
     `;
@@ -74,7 +75,7 @@
     modal.innerHTML = `
       <div class="upload-modal-backdrop" onclick="closeGeminiUploadModal()"></div>
       <div class="upload-modal-content">
-        <h3>📤 上传 Gemini 记录</h3>
+        <h3>${window.ArcIcons ? window.ArcIcons.icon('upload', 16) : ''} 上传 Gemini 记录</h3>
         <p class="upload-desc">
           选择 Google Takeout 导出的 ZIP 包或「我的活动记录.html」<br>
           <small>可以一次选多个文件，重复的记录会自动去重</small>
@@ -82,7 +83,7 @@
         <div class="upload-zone" id="upload-zone">
           <input type="file" id="gemini-file-input" multiple accept=".html,.zip" style="display:none" />
           <div class="upload-zone-inner" onclick="document.getElementById('gemini-file-input').click()">
-            <span class="upload-icon">📁</span>
+            <span class="upload-icon">${window.ArcIcons ? window.ArcIcons.icon('folder', 28) : ''}</span>
             <span>点击选择文件 或 拖拽到这里</span>
           </div>
         </div>
@@ -687,9 +688,9 @@
       emptyState.className = 'empty-state';
       emptyState.innerHTML = `
         <div style="text-align:center; padding:60px 20px; color:#999;">
-          <div style="font-size:48px; margin-bottom:16px;">📭</div>
+          <div style="margin-bottom:16px;">${window.ArcIcons ? window.ArcIcons.icon('folder', 44) : ''}</div>
           <p>还没有记录</p>
-          <p style="font-size:14px;">点击右下角 📤 上传 Gemini 导出的活动记录</p>
+          <p style="font-size:14px;">点击右下角上传按钮，导入 Gemini 导出的活动记录</p>
         </div>
       `;
       chatPage.appendChild(emptyState);
@@ -709,12 +710,14 @@
     // 收起/展开按钮
     const navToggle = document.createElement('button');
     navToggle.className = 'nav-toggle';
-    navToggle.innerHTML = '📅';
+    const calIcon = () => window.ArcIcons ? window.ArcIcons.icon('calendar', 18) : '📅';
+    const closeIcon = () => window.ArcIcons ? window.ArcIcons.icon('close', 16) : '✕';
+    navToggle.innerHTML = calIcon();
     navToggle.title = '显示/隐藏日期导航';
     navToggle.onclick = function() {
       const nav = document.querySelector('.date-nav');
       nav.classList.toggle('collapsed');
-      this.innerHTML = nav.classList.contains('collapsed') ? '📅' : '✕';
+      this.innerHTML = nav.classList.contains('collapsed') ? calIcon() : closeIcon();
     };
     chatPage.appendChild(navToggle);
 
@@ -732,7 +735,7 @@
     dateNav.className = 'date-nav';
     dateNav.id = 'date-nav';
 
-    let navHTML = `<div class="date-nav-title">📅 ${sortedDates.length} 天</div>`;
+    let navHTML = `<div class="date-nav-title">${window.ArcIcons ? window.ArcIcons.icon('calendar', 13) : ''} ${sortedDates.length} 天</div>`;
     for (const month of sortedMonths) {
       const [year, mon] = month.split('-');
       const monthName = `${year}年${parseInt(mon)}月`;
@@ -1019,7 +1022,7 @@
 
         const formattedContent = currentVer.aiResponse.replace(/\n/g, '<br>');
         aiMsg.innerHTML = `
-          <div class="avatar">✨</div>
+          <div class="avatar">${window.ArcIcons ? window.ArcIcons.icon('sparkle', 20) : '✨'}</div>
           <div class="bubble-wrap">
             <div class="bubble">${formattedContent}</div>
             <div class="timestamp">${extractTime(currentVer.timestamp)}${versionSwitcher}</div>
@@ -1031,7 +1034,7 @@
         const incompleteMsg = document.createElement('div');
         incompleteMsg.className = 'message ai incomplete';
         incompleteMsg.innerHTML = `
-          <div class="avatar">✨</div>
+          <div class="avatar">${window.ArcIcons ? window.ArcIcons.icon('sparkle', 20) : '✨'}</div>
           <div class="bubble-wrap">
             <div class="bubble" style="background: #f5f5f5; color: #999; font-style: italic;">
               这段记忆不完整...
@@ -1117,7 +1120,7 @@
 
           const formattedContent = currentVer.aiResponse.replace(/\n/g, '<br>');
           aiMsg.innerHTML = `
-            <div class="avatar">✨</div>
+            <div class="avatar">${window.ArcIcons ? window.ArcIcons.icon('sparkle', 20) : '✨'}</div>
             <div class="bubble-wrap">
               <div class="bubble">${formattedContent}</div>
               <div class="timestamp">${extractTime(currentVer.timestamp)}${versionSwitcher}</div>
@@ -1129,7 +1132,7 @@
           const incompleteMsg = document.createElement('div');
           incompleteMsg.className = 'message ai incomplete';
           incompleteMsg.innerHTML = `
-            <div class="avatar">✨</div>
+            <div class="avatar">${window.ArcIcons ? window.ArcIcons.icon('sparkle', 20) : '✨'}</div>
             <div class="bubble-wrap">
               <div class="bubble" style="background: #f5f5f5; color: #999; font-style: italic;">
                 这段记忆不完整...
@@ -1213,7 +1216,9 @@
     const msg = document.createElement('div');
     msg.className = `message ${type}`;
 
-    const avatar = type === 'ai' ? '✨' : '🙋';
+    const avatar = window.ArcIcons
+      ? window.ArcIcons.icon(type === 'ai' ? 'sparkle' : 'user', 20)
+      : (type === 'ai' ? '✨' : '🙋');
 
     // 处理内容中的换行
     const formattedContent = content.replace(/\n/g, '<br>');

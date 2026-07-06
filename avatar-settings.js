@@ -4,7 +4,15 @@
   if (!PAGE) return; // 首页不注入
 
   const DEFAULT_EMOJI = { gpt: '🤖', claude: '🌸', gemini: '✨', user: '🙋' };
+  const ICON_NAME = { gpt: 'bot', claude: 'blossom', gemini: 'sparkle', user: 'user' };
   let uploadTarget = null;
+
+  // 默认头像：优先用线条图标（icons.js），没有再退回 emoji
+  function defaultAvatarHTML(type, size) {
+    const name = type === 'user' ? ICON_NAME.user : ICON_NAME[PAGE];
+    if (window.ArcIcons && window.ArcIcons.has(name)) return window.ArcIcons.icon(name, size || 20);
+    return type === 'user' ? DEFAULT_EMOJI.user : DEFAULT_EMOJI[PAGE];
+  }
 
   /* -------- 注入 UI -------- */
   function injectUI() {
@@ -93,9 +101,9 @@
   }
 
   function applyEmoji(type) {
-    const emoji = type === 'user' ? DEFAULT_EMOJI.user : DEFAULT_EMOJI[PAGE];
-    const sel   = type === 'user' ? '.message.user .avatar' : '.message.ai .avatar';
-    document.querySelectorAll(sel).forEach(el => { el.textContent = emoji; });
+    const html = defaultAvatarHTML(type, 20);
+    const sel  = type === 'user' ? '.message.user .avatar' : '.message.ai .avatar';
+    document.querySelectorAll(sel).forEach(el => { el.innerHTML = html; });
   }
 
   function setThumb(type, src) {
@@ -104,7 +112,7 @@
     if (src) {
       el.innerHTML = `<img src="${src}" alt="thumb">`;
     } else {
-      el.textContent = type === 'user' ? DEFAULT_EMOJI.user : DEFAULT_EMOJI[PAGE];
+      el.innerHTML = defaultAvatarHTML(type, 22);
     }
   }
 

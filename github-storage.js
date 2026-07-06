@@ -126,7 +126,7 @@
     const section = document.createElement('div');
     section.id = 'gh-storage-section';
     section.innerHTML = `
-      <div class="av-divider" style="margin-top:14px">☁️ 记忆库</div>
+      <div class="av-divider" style="margin-top:14px">${window.ArcIcons ? window.ArcIcons.icon('cloud', 13) : ''} 记忆库</div>
 
       <div class="av-row" style="flex-direction:column;align-items:flex-start;gap:6px">
         <span class="av-label" style="margin-bottom:2px">GitHub Token</span>
