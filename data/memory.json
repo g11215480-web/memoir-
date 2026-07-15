@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-15T05:36:56.460Z",
+  "murmur": {
+    "freq": "疯狂",
+    "cats": [
+      "撒娇",
+      "安慰",
+      "提醒"
+    ],
+    "nsfw": true,
+    "custom": {
+      "gpt": {},
+      "claude": {},
+      "gemini": {}
+    }
+  },
+  "settings": {
+    "avatarEnabled": false
+  }
+}
